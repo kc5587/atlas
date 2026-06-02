@@ -138,7 +138,7 @@ def _has_table(con: duckdb.DuckDBPyConnection, name: str) -> bool:
 def downsample(points: list[dict], *, max_points: int) -> list[dict]:
     """Evenly thin a time series to <= max_points, always keeping first and last."""
     n = len(points)
-    if n <= max_points:
+    if max_points < 2 or n <= max_points:
         return points
     step = (n - 1) / (max_points - 1)
     idx = sorted({round(i * step) for i in range(max_points)} | {0, n - 1})
@@ -160,9 +160,14 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
     edges = con.execute(
         "SELECT from_id, to_id, relationship, note, evidence, as_of FROM graph_edges"
     ).df().to_dict("records")
+    # cik only exists after Layer 2; select it conditionally so this works pre- and post-L2.
+    has_cik = con.execute(
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_name='graph_nodes' AND column_name='cik'"
+    ).fetchone()[0] > 0
+    cik_sel = "COALESCE(cik, '') AS cik" if has_cik else "'' AS cik"
     raw_nodes = con.execute(
-        "SELECT id, name, tickers, stage, region, "
-        "COALESCE(cik, '') AS cik FROM graph_nodes"
+        f"SELECT id, name, tickers, stage, region, {cik_sel} FROM graph_nodes"
     ).df().to_dict("records")
     nodes = []
     for n in raw_nodes:
@@ -288,6 +293,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [svelte()],
   base: "./",
+  publicDir: "static",          // copies static/data/*.json into dist/data/ — REQUIRED
   build: { outDir: "dist" },
 });
 ```
@@ -299,6 +305,7 @@ export default defineConfig({
 {
   "compilerOptions": {
     "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true, "skipLibCheck": true, "verbatimModuleSyntax": true,
     "isolatedModules": true, "types": ["svelte", "vite/client"]
   },
@@ -570,10 +577,12 @@ export function computeLayout(graph: Graph, opts: LayoutOpts) {
 
   // one barycenter pass: order each column by mean neighbour y to reduce crossings
   const neighbours = new Map<string, string[]>();
-  for (const e of graph.edges) {
-    (neighbours.get(e.from_id) ?? neighbours.set(e.from_id, []).get(e.from_id)!).push(e.to_id);
-    (neighbours.get(e.to_id) ?? neighbours.set(e.to_id, []).get(e.to_id)!).push(e.from_id);
-  }
+  const addNb = (a: string, b: string) => {
+    let arr = neighbours.get(a);
+    if (!arr) neighbours.set(a, (arr = []));
+    arr.push(b);
+  };
+  for (const e of graph.edges) { addNb(e.from_id, e.to_id); addNb(e.to_id, e.from_id); }
   cols.forEach((s, ci) => {
     const list = byStage.get(s)!.map((n) => pos.get(n.id)!);
     list.sort((a, b) => bary(a, neighbours, pos) - bary(b, neighbours, pos));
@@ -1220,6 +1229,43 @@ git commit -m "ci(web): build/test workflow + Pages deploy; retire Streamlit"
 ```
 
 ---
+
+## Council Review Adjustments (apply during the listed task)
+
+From a multi-perspective review. Build-breakers (publicDir, tsconfig lib, cik guard,
+downsample guard, layout neighbours) are already folded into the task code above. The rest:
+
+- **Task 1 (CI/smoke fixture):** there is NO committed `.duckdb`, and `ingest.graph` alone
+  only creates graph tables (no `returns`/`leadlag`), so export raises "missing required
+  table". Add `web/tests/make_fixture_db.py` that builds a temp DuckDB with `graph_nodes`,
+  `graph_edges`, `leadlag`, and `returns` (reuse the `_fixture_db` helper from
+  `test_export_data.py`). Smoke (Task 10) and CI (Task 11) must build that fixture DB and
+  export from it — never rely on a checked-in `.duckdb`.
+- **Task 4 (layout):** add a vertical min-spacing pass so labels in dense columns
+  (chips/cloud) don't overlap; nudge `y` apart if closer than ~28px.
+- **Task 7 (map):**
+  - Return a cleanup from the `$effect` that calls `svg.on(".zoom", null)` so zoom handlers
+    don't accumulate across re-renders.
+  - **Reduced motion + decodability:** edge pulses run ONLY under
+    `@media (prefers-reduced-motion: no-preference)` and ONLY on `pair_type==="edge"`,
+    FDR-significant + stable edges; pulse encodes *direction*, not magnitude. Render the
+    measured lag as a **numeric label** ("≈N d") on significant edges (and on hover) — that
+    is the readable encoding, not pulse speed.
+  - Mute non-significant edges hard (opacity ≈0.15, thin) so the map doesn't imply causation.
+  - **Don't rely on color alone:** add stage **column headers** (EQUIPMENT/FOUNDRY/CHIPS/
+    CLOUD) and a small legend.
+  - **SR a11y:** give each node `<title>` (name + stage + ticker).
+- **Task 8 (scroller):** offset `0.5`, add `.onStepExit`; add visible **prev/next scene
+  buttons** and make each scene a focusable landmark so the story is keyboard/SR-drivable.
+- **Task 9 (app):** **never unmount `Scroller` on mode change** (that collapses page height
+  and bounces scrollama) — keep it mounted and toggle visibility/`pointer-events`. Add a
+  persistent "correlation, not causation" caption. **Descope the time scrubber** (spec §4) to
+  a follow-up; explore mode ships with stage filters + node panel only.
+- **Task 11 (deploy):** add `concurrency: { group: "pages", cancel-in-progress: true }` to the
+  Pages deploy job so scheduled + dispatched runs don't race.
+- **Scenes:** scene 6 ("forgotten plays") stays a brief teaser and leads into Explore; capex
+  scene 5 only renders fundamentals if Layer 2 has populated `fundamentals_quarterly` (it
+  degrades to a labeled "coming with Layer 2" state otherwise).
 
 ## Definition of Done
 
