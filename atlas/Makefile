@@ -7,7 +7,7 @@ ingest:
 	python -m ingest.prices && python -m ingest.macro && python -m ingest.graph
 
 build:
-	cd dbt_project && dbt build --profiles-dir .
+	cd dbt_project && dbt deps && dbt build --profiles-dir .
 
 analyze:
 	python -m analysis.leadlag
