@@ -1,7 +1,9 @@
 # Atlas Phase Zero Security Audit
 
-**Status:** Credential revocation and clean-room filesystem cleanup are complete. Public
-push remains blocked until the fresh-history public tree passes final verification.
+**Status:** ✅ CLOSED (2026-06-02). All v1 credentials revoked at their providers and the
+v1 infrastructure (EC2 instance + local Postgres/Airflow/MinIO docker stack) decommissioned.
+The public repo was built from fresh history (atlas/ only, no v1 objects), scanned clean,
+and deployed. See "Closure" below.
 
 ## Scan Summary
 
@@ -53,9 +55,22 @@ The repository is reinitialized from the post-cleanup clean-room `atlas/` tree w
 single root commit. No local legacy branch or historical v1 Git object is retained after
 verification. This avoids publishing v1 history and aligns with the from-scratch rebuild.
 
-## Remaining Actions Before Public Release
+## Closure (2026-06-02)
 
-1. Construct the fresh-history public tree from the clean-room v2 source.
-2. Run working-tree and Git-history secret scans on that exact public tree and require zero
-   leaks.
-3. Configure deployment only after the fresh-history verification passes.
+All pre-release actions are complete:
+
+1. ✅ Fresh-history public tree constructed from the clean-room `atlas/` source (no v1 Git
+   objects, no legacy `.env`/`env.lock`/keys).
+2. ✅ Secret scan on the published tree returned **zero findings**
+   (`gitleaks detect --no-git --config .gitleaks.toml` over `atlas/`, verified
+   2026-06-02 — 516 KB scanned, no leaks).
+3. ✅ Deployment configured and live on Streamlit Community Cloud
+   (`/healthz` → 200) — see `MEMORY/atlas-deployed-app`.
+4. ✅ All 12 v1 credentials in the inventory revoked at their providers; the v1 EC2
+   instance and local Postgres/Airflow/MinIO docker stack are decommissioned, so the
+   infra-side passwords are moot.
+
+**Residual note:** this *private working* repo still contains the legacy `ai-value-chain-data/`
+tree and v1 history on disk. Those secrets are now dead (revoked) and were never published
+(the public repo is fresh-history). Archiving/removing the legacy tree locally is optional
+housekeeping, not a security requirement. Gate is CLOSED.
