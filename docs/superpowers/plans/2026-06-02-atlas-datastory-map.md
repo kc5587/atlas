@@ -67,7 +67,7 @@ def _fixture_db(path: Path) -> duckdb.DuckDBPyConnection:
     con.execute("INSERT INTO graph_nodes VALUES ('nvidia','NVIDIA','[\"NVDA\"]','chips','US','0001045810')")
     con.execute("CREATE TABLE graph_edges(from_id VARCHAR,to_id VARCHAR,relationship VARCHAR,note VARCHAR,evidence VARCHAR,as_of VARCHAR)")
     con.execute("INSERT INTO graph_edges VALUES ('nvidia','nvidia','supplies','','','2024-01-01')")
-    con.execute("CREATE TABLE leadlag(pair_type VARCHAR,left VARCHAR,right VARCHAR,lag INT,corr DOUBLE,p_value DOUBLE,q_value DOUBLE,n_eff INT,stable BOOLEAN)")
+    con.execute("CREATE TABLE leadlag(pair_type VARCHAR,\"left\" VARCHAR,\"right\" VARCHAR,lag INT,corr DOUBLE,p_value DOUBLE,q_value DOUBLE,n_eff INT,stable BOOLEAN)")
     con.execute("INSERT INTO leadlag VALUES ('edge','nvidia','nvidia',2,0.5,0.01,0.05,300,true)")
     con.execute("CREATE TABLE returns(ticker VARCHAR, date DATE, log_return DOUBLE)")
     con.execute("INSERT INTO returns SELECT 'NVDA', DATE '2020-01-01' + INTERVAL (i) DAY, 0.001 FROM range(0,400) t(i)")
@@ -108,7 +108,7 @@ def test_export_all_missing_required_table_raises(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd atlas/web && python -m pytest tests/test_export_data.py -v`
+Run: `cd atlas && uv run --extra dev python -m pytest web/tests/test_export_data.py -v`
 Expected: FAIL — cannot import `export_data`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd atlas/web && python -m pytest tests/test_export_data.py -v`
+Run: `cd atlas && uv run --extra dev python -m pytest web/tests/test_export_data.py -v`
 Expected: 3 passed.
 
 - [ ] **Step 5: Commit**
