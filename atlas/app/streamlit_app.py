@@ -8,8 +8,8 @@ import networkx as nx
 import plotly.graph_objects as go
 import streamlit as st
 
-from config import DUCKDB_PATH
-from app.data import DatabaseStatus, refresh_database
+from atlas.app.data import DatabaseStatus, refresh_database
+from atlas.config import DUCKDB_PATH
 
 st.set_page_config(page_title="Atlas — AI Value Chain", layout="wide")
 
