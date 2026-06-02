@@ -1,0 +1,12 @@
+name: atlas
+version: "1.0"
+profile: atlas
+model-paths: ["models"]
+models:
+  atlas:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+    graph:
+      +materialized: table

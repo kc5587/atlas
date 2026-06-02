@@ -1,0 +1,7 @@
+version: 2
+sources:
+  - name: graph
+    schema: main
+    tables:
+      - name: graph_nodes
+      - name: graph_edges

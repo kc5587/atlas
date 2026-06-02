@@ -1,0 +1,7 @@
+title = "atlas gitleaks config"
+[extend]
+useDefault = true
+
+[allowlist]
+description = "non-secret example files"
+paths = ['''\.env\.example$''', '''docs/.*''']

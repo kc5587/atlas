@@ -1,0 +1,38 @@
+# secrets / keys
+.env
+*.env
+!.env.example
+*.pem
+ssh_key
+ssh_key.pub
+*.key
+
+# data / db / logs (regenerated from source)
+data/
+*.duckdb
+*.duckdb.wal
+*.parquet
+# committed CI test fixtures (override the broad *.parquet rule above)
+!atlas/tests/fixtures/
+!atlas/tests/fixtures/**/
+!atlas/tests/fixtures/**/*.parquet
+logs/
+*.log
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# dbt
+atlas/dbt_project/target/
+atlas/dbt_project/dbt_packages/
+atlas/dbt_project/logs/
+atlas/dbt_project/.user.yml
+
+# os
+.DS_Store

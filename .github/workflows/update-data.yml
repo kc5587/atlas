@@ -1,0 +1,19 @@
+name: update-data
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: atlas } }
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv venv && uv pip install -e ".[dev]"
+      - run: uv run make all
+      - run: uv run python scripts/publish_release.py

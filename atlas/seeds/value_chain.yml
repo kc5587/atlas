@@ -1,0 +1,40 @@
+nodes:
+  - id: asml
+    name: ASML Holding
+    tickers: [ASML]
+    stage: equipment
+    region: NL
+  - id: tsmc
+    name: TSMC
+    tickers: [TSM]
+    stage: foundry
+    region: TW
+  - id: nvidia
+    name: NVIDIA
+    tickers: [NVDA]
+    stage: chips
+    region: US
+  - id: microsoft
+    name: Microsoft
+    tickers: [MSFT]
+    stage: cloud
+    region: US
+edges:
+  - from: asml
+    to: tsmc
+    relationship: supplies
+    note: EUV lithography systems
+    evidence: "ASML FY2023 20-F"
+    as_of: 2024-01-01
+  - from: tsmc
+    to: nvidia
+    relationship: supplies
+    note: Advanced-node wafer fabrication
+    evidence: "NVDA 10-K supplier concentration"
+    as_of: 2024-01-01
+  - from: nvidia
+    to: microsoft
+    relationship: supplies
+    note: Data-center GPUs
+    evidence: "MSFT capex commentary FY2024"
+    as_of: 2024-01-01

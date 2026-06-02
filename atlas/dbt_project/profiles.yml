@@ -1,0 +1,8 @@
+atlas:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('ATLAS_DUCKDB_PATH', '../data/atlas.duckdb') }}"
+      extensions: []
+      external_root: "{{ env_var('ATLAS_DATA_RAW', '../data/raw') }}"

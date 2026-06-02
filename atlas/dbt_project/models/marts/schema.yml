@@ -1,0 +1,18 @@
+version: 2
+models:
+  - name: prices_daily
+    columns:
+      - name: ticker
+        tests: [not_null]
+  - name: returns
+    columns:
+      - name: log_return
+        tests: [not_null]
+  - name: graph_nodes
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: stage
+        tests:
+          - accepted_values:
+              values: [equipment, foundry, chips, cloud]
