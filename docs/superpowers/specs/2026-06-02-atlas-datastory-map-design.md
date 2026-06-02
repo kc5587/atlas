@@ -35,15 +35,15 @@ JSON once; all interaction (pan/zoom/hover/scroll) is client-side JS — instant
 Dependency is directional, so direction is the dominant visual axis (arrowheads + animation),
 not clustering.
 
-- **Layout:** Sugiyama layered DAG (`d3-dag`), columns by `stage`
-  (equipment → foundry → chips → cloud), value flowing left→right.
-- **Truthfulness:** the layout **must draw skip-level edges** (e.g. NVDA→enterprise) and
+- **Layout:** a **stage-column layout** — `x` is fixed by the node's declared `stage`
+  (equipment → foundry → chips → cloud, left→right); `y` orders nodes within a column. Order
+  is chosen by a barycenter heuristic (mean `y` of connected nodes) to reduce edge crossings.
+  No external graph-layout library and no topological layering needed.
+- **Truthfulness:** the layout **draws skip-level edges** (e.g. NVDA→enterprise) and
   **back-edges** (hyperscaler in-house silicon, e.g. Google TPU / Amazon Trainium looping into
-  "chips"). A pure Sankey would lie by omission; the DAG layout keeps non-adjacent edges.
-- **Cycle handling:** Sugiyama layering needs a DAG, but back-edges form cycles. `layout.ts`
-  detects cycle-forming edges, temporarily reverses them to compute layering, then renders
-  them in their **true** direction (visually distinguished, e.g. dashed/curved) so the
-  feedback loop is honest without breaking the layout. This is unit-tested.
+  "chips"). Because columns come from the declared `stage`, **cycles are a non-issue** — a
+  back-edge simply renders right→left, visually distinguished (dashed/curved). A pure Sankey
+  would lie by omission; this keeps every non-adjacent edge. `layout.ts` is pure + unit-tested.
 - **Two flows:** goods/value flow downstream; demand/capital (capex) flows upstream. The map
   can express both — the upstream demand-pull is the lead/lag thesis.
 - **Encodings:** node size = criticality/concentration; node color = stage; edge thickness =
@@ -78,15 +78,15 @@ not clustering.
 ```
 atlas/
   web/                          # NEW front-end (decoupled from Python)
-    package.json                # vite + svelte 5 + typescript
+    package.json                # vite + svelte 5 + typescript (d3, scrollama, zod)
     vite.config.ts
     index.html
     src/
       main.ts
       App.svelte                # layout: sticky map + scroller + explore toggle
       lib/
-        data.ts                 # fetch + typed load of static JSON
-        layout.ts               # graph -> layered-DAG positions (d3-dag); PURE, unit-tested
+        data.ts                 # fetch + typed/zod-validated load of static JSON
+        layout.ts               # graph -> stage-column positions (barycenter); PURE, unit-tested
         leadlag.ts              # edge styling/format from lead/lag rows; PURE, unit-tested
         scenes.ts               # scene definitions (camera target + highlight set)
       components/
@@ -158,7 +158,7 @@ state).
 
 1. `web/export_data.py` + pytest (JSON contract).
 2. `web/` scaffold (Vite/Svelte/TS) + `data.ts` typed loaders + tests.
-3. `layout.ts` (layered DAG) + tests; `ValueChainMap.svelte` static render.
+3. `layout.ts` (stage-column layout + barycenter ordering) + tests; `ValueChainMap.svelte` static render.
 4. Edge styling/lead-lag (`leadlag.ts`) + pulse animation.
 5. `Scroller.svelte` + scenes 1–7 (camera/highlight transitions).
 6. Explore mode: `NodePanel`, `Controls` (filters + time scrubber).
