@@ -1,7 +1,7 @@
 # Atlas Layer 2 — SEC EDGAR Fundamentals (Scope / Design)
 
 **Date:** 2026-06-02
-**Status:** Scoping — decisions pending before a plan is written
+**Status:** Scoped — decisions confirmed; ready for an implementation plan
 **Builds on:** `2026-06-02-atlas-value-chain-design.md` (§9 roadmap, Layer 2)
 
 ---
@@ -65,15 +65,14 @@ scope (see non-goals).
 4. **Quarterly granularity** — consistent with the daily-backbone / native-frequency rules.
 5. **Still descriptive, not predictive** — same correlation≠causation framing as the slice.
 
-## 7. Decisions to confirm (before writing the plan)
+## 7. Decisions (confirmed 2026-06-02)
 
-- **D1 — Universe:** US filers first (NVDA, AMD, AVGO, MU, AMAT, LRCX, MSFT, GOOGL, AMZN,
-  META, ORCL, DELL, SMCI), defer ASML/TSM fundamentals to 2b? *(Recommended: yes — clean
-  XBRL, and capex is concentrated in the US hyperscalers/semis anyway.)*
-- **D2 — Metrics:** start with **revenue + capex + gross margin** only? *(Recommended: yes —
-  capex is the headline signal; revenue/margin give the downstream link.)*
-- **D3 — Headline analysis:** quarterly **capex→downstream-revenue** (edge-aware) and
-  **capex→price** lead/lag, point-in-time on `filed` date? *(Recommended: yes.)*
+- **D1 — Universe:** ✅ **US filers first** (NVDA, AMD, AVGO, MU, AMAT, LRCX, MSFT, GOOGL,
+  AMZN, META, ORCL, DELL, SMCI). ASML/TSM fundamentals deferred to Layer 2b (prices + graph
+  position retained).
+- **D2 — Metrics:** ✅ **revenue + capex + gross margin** only.
+- **D3 — Headline analysis:** ✅ quarterly **capex→downstream-revenue** (edge-aware) and
+  **capex→price** lead/lag, point-in-time on the SEC `filed` date.
 
 ## 8. Rough task outline (becomes the plan once decisions confirmed)
 
