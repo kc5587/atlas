@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import duckdb
@@ -8,6 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from config import DUCKDB_PATH
+from app.data import DatabaseStatus, refresh_database
 
 st.set_page_config(page_title="Atlas — AI Value Chain", layout="wide")
 
@@ -19,6 +21,27 @@ def _con() -> duckdb.DuckDBPyConnection:
 
 def _load(table: str):
     return _con().execute(f"SELECT * FROM {table}").fetchdf()
+
+
+def _secret(name: str) -> str | None:
+    try:
+        return st.secrets.get(name)
+    except FileNotFoundError:
+        return None
+
+
+@st.cache_resource
+def _prepare_database() -> DatabaseStatus | None:
+    repo = _secret("ATLAS_GITHUB_REPOSITORY") or os.environ.get(
+        "ATLAS_GITHUB_REPOSITORY", "kc5587/atlas"
+    )
+    token = _secret("ATLAS_GITHUB_TOKEN") or os.environ.get("ATLAS_GITHUB_TOKEN")
+    try:
+        return refresh_database(repo, DUCKDB_PATH, token=token)
+    except RuntimeError:
+        if Path(DUCKDB_PATH).exists():
+            return None
+        raise
 
 
 def _graph_figure(nodes, edges, leadlag) -> go.Figure:
@@ -47,9 +70,24 @@ def _graph_figure(nodes, edges, leadlag) -> go.Figure:
 st.title("Atlas — AI Value-Chain Research Engine")
 st.caption("Descriptive lead/lag relationships, not trading signals. Correlation ≠ causation.")
 
+try:
+    database_status = _prepare_database()
+except RuntimeError as exc:
+    st.error(str(exc))
+    st.stop()
+
 if not Path(DUCKDB_PATH).exists():
     st.warning("No database found. Run `make all` to build it.")
     st.stop()
+if database_status is None:
+    st.warning("Using a locally built database because no valid remote release is available.")
+elif database_status.stale:
+    st.warning(
+        f"Serving fallback data as of {database_status.generated_at} "
+        f"from `{database_status.tag}`."
+    )
+else:
+    st.caption(f"Data as of {database_status.generated_at} from `{database_status.tag}`.")
 
 tab_map, tab_dash, tab_report = st.tabs(["Value-chain map", "Dashboard", "Report"])
 
