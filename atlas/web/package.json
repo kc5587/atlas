@@ -1,0 +1,26 @@
+{
+  "name": "atlas-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4",
+    "@playwright/test": "^1.45",
+    "svelte": "^5",
+    "svelte-check": "^4",
+    "typescript": "^5.5",
+    "vite": "^5.4",
+    "vitest": "^2"
+  },
+  "dependencies": {
+    "d3": "^7.9",
+    "scrollama": "^3.2",
+    "zod": "^3.23"
+  }
+}
