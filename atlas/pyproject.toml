@@ -16,11 +16,8 @@ dependencies = [
   "dbt-duckdb>=1.8",
   "pyyaml>=6",
   "pydantic>=2.7",
-  "networkx>=3.3",
   "numpy>=1.26",
   "scipy>=1.13",
-  "plotly>=5.22",
-  "streamlit>=1.36",
   "requests>=2.32",
 ]
 
@@ -44,8 +41,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["ingest", "analysis", "app"]
-# streamlit_app.py is UI glue (no unit tests by design); tests are not self-measured.
-omit = ["tests/*", "app/streamlit_app.py"]
+omit = ["tests/*"]
 
 [tool.coverage.report]
 # IO/orchestration boundaries are exercised via the integration (make all / dbt fixture
