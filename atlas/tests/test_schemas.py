@@ -2,7 +2,7 @@ import pandas as pd
 import pandera.errors
 import pytest
 
-from ingest.schemas import MACRO_SCHEMA, PRICE_SCHEMA
+from ingest.schemas import FUNDAMENTAL_SCHEMA, MACRO_SCHEMA, PRICE_SCHEMA
 
 
 def _valid_prices() -> pd.DataFrame:
@@ -39,3 +39,32 @@ def test_macro_schema_accepts_valid():
         "value": [5.33],
     })
     MACRO_SCHEMA.validate(df)
+
+
+def _valid_fundamentals() -> pd.DataFrame:
+    return pd.DataFrame({
+        "cik": ["0001045810"],
+        "ticker": ["NVDA"],
+        "concept": ["Revenues"],
+        "metric": ["revenue"],
+        "period_start": pd.to_datetime(["2023-01-01"]),
+        "period_end": pd.to_datetime(["2023-03-31"]),
+        "filed": pd.to_datetime(["2023-05-05"]),
+        "fiscal_period": ["Q1"],
+        "fy": [2023],
+        "form": ["10-Q"],
+        "value": [7192000000.0],
+        "unit": ["USD"],
+        "accn": ["0001045810-23-000079"],
+    })
+
+
+def test_fundamental_schema_accepts_valid():
+    FUNDAMENTAL_SCHEMA.validate(_valid_fundamentals())
+
+
+def test_fundamental_schema_rejects_bad_metric():
+    bad = _valid_fundamentals()
+    bad.loc[0, "metric"] = "ebitda"
+    with pytest.raises(pandera.errors.SchemaError):
+        FUNDAMENTAL_SCHEMA.validate(bad)

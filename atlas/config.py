@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -31,3 +32,24 @@ BOOTSTRAP_ITERS = 1000
 BOOTSTRAP_BLOCK = 20
 FDR_ALPHA = 0.10
 RANDOM_SEED = 7
+
+# Layer 2: SEC EDGAR fundamentals.
+SEC_USER_AGENT = os.getenv("ATLAS_SEC_USER_AGENT", "atlas-research atlas@example.com")
+SEC_RATE_LIMIT_SECONDS = 0.2
+
+CONCEPT_TAGS: dict[str, list[str]] = {
+    "revenue": [
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "Revenues",
+        "SalesRevenueNet",
+    ],
+    "capex": [
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
+    ],
+    "gross_profit": ["GrossProfit"],
+    "cost_of_revenue": ["CostOfRevenue", "CostOfGoodsAndServicesSold"],
+}
+
+FUND_MAX_LAG_QUARTERS = 4
+FUND_NMIN = 12

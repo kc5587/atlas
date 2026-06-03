@@ -24,3 +24,22 @@ MACRO_SCHEMA = pa.DataFrameSchema(
     },
     strict=True,
 )
+
+FUNDAMENTAL_SCHEMA = pa.DataFrameSchema(
+    {
+        "cik": pa.Column(str, nullable=False),
+        "ticker": pa.Column(str, nullable=False),
+        "concept": pa.Column(str, nullable=False),
+        "metric": pa.Column(str, pa.Check.isin(["revenue", "capex", "gross_margin"])),
+        "period_start": pa.Column("datetime64[ns]", nullable=True),
+        "period_end": pa.Column("datetime64[ns]", nullable=False),
+        "filed": pa.Column("datetime64[ns]", nullable=False),
+        "fiscal_period": pa.Column(str, nullable=True),
+        "fy": pa.Column("int64", nullable=True, coerce=True),
+        "form": pa.Column(str, nullable=True),
+        "value": pa.Column(float, nullable=False),
+        "unit": pa.Column(str, nullable=False),
+        "accn": pa.Column(str, nullable=False),
+    },
+    strict=True,
+)
