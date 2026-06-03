@@ -4,7 +4,7 @@ setup:
 	uv venv && uv pip install -e ".[dev]"
 
 ingest:
-	python -m ingest.prices && python -m ingest.macro && python -m ingest.graph
+	python -m ingest.prices && python -m ingest.macro && python -m ingest.graph && python -m ingest.fundamentals
 
 build:
 	cd dbt_project && dbt deps && dbt build --profiles-dir .
