@@ -11,7 +11,7 @@ jobs:
     defaults: { run: { working-directory: atlas } }
     env:
       GH_TOKEN: ${{ github.token }}
-      ATLAS_SEC_USER_AGENT: atlas-research kc5587@users.noreply.github.com
+      ATLAS_SEC_USER_AGENT: ${{ secrets.ATLAS_SEC_USER_AGENT }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
