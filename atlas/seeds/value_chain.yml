@@ -1,40 +1,202 @@
 nodes:
+  # --- equipment ---
   - id: asml
     name: ASML Holding
     tickers: [ASML]
     stage: equipment
     region: NL
+  - id: applied_materials
+    name: Applied Materials
+    tickers: [AMAT]
+    stage: equipment
+    region: US
+  - id: lam_research
+    name: Lam Research
+    tickers: [LRCX]
+    stage: equipment
+    region: US
+  # --- foundry ---
   - id: tsmc
     name: TSMC
     tickers: [TSM]
     stage: foundry
     region: TW
+  # --- chips ---
   - id: nvidia
     name: NVIDIA
     tickers: [NVDA]
     stage: chips
     region: US
+  - id: amd
+    name: AMD
+    tickers: [AMD]
+    stage: chips
+    region: US
+  - id: broadcom
+    name: Broadcom
+    tickers: [AVGO]
+    stage: chips
+    region: US
+  - id: micron
+    name: Micron Technology
+    tickers: [MU]
+    stage: chips
+    region: US
+  # --- cloud ---
   - id: microsoft
     name: Microsoft
     tickers: [MSFT]
     stage: cloud
     region: US
+  - id: google
+    name: Alphabet (Google)
+    tickers: [GOOGL]
+    stage: cloud
+    region: US
+  - id: amazon
+    name: Amazon
+    tickers: [AMZN]
+    stage: cloud
+    region: US
+  - id: meta
+    name: Meta Platforms
+    tickers: [META]
+    stage: cloud
+    region: US
+  - id: oracle
+    name: Oracle
+    tickers: [ORCL]
+    stage: cloud
+    region: US
+  - id: dell
+    name: Dell Technologies
+    tickers: [DELL]
+    stage: cloud
+    region: US
+  - id: supermicro
+    name: Super Micro Computer
+    tickers: [SMCI]
+    stage: cloud
+    region: US
 edges:
+  # --- equipment -> foundry ---
   - from: asml
     to: tsmc
     relationship: supplies
     note: EUV lithography systems
     evidence: "ASML FY2023 20-F"
     as_of: 2024-01-01
+  - from: applied_materials
+    to: tsmc
+    relationship: supplies
+    note: Deposition and etch process equipment
+    evidence: "AMAT FY2023 10-K customer concentration"
+    as_of: 2024-01-01
+  - from: lam_research
+    to: tsmc
+    relationship: supplies
+    note: Etch and deposition equipment
+    evidence: "LRCX FY2023 10-K customer concentration"
+    as_of: 2024-01-01
+  # --- foundry -> chips ---
   - from: tsmc
     to: nvidia
     relationship: supplies
     note: Advanced-node wafer fabrication
     evidence: "NVDA 10-K supplier concentration"
     as_of: 2024-01-01
+  - from: tsmc
+    to: amd
+    relationship: supplies
+    note: Advanced-node wafer fabrication
+    evidence: "AMD 10-K manufacturing dependence on TSMC"
+    as_of: 2024-01-01
+  - from: tsmc
+    to: broadcom
+    relationship: supplies
+    note: Advanced-node wafer fabrication for custom ASICs
+    evidence: "AVGO 10-K foundry dependence"
+    as_of: 2024-01-01
+  # --- chips -> chips (intra-stage HBM supply) ---
+  - from: micron
+    to: nvidia
+    relationship: supplies
+    note: HBM (high-bandwidth memory) for data-center GPUs
+    evidence: "MU HBM3E qualification commentary FY2024"
+    as_of: 2024-01-01
+  # --- chips -> cloud ---
   - from: nvidia
     to: microsoft
     relationship: supplies
     note: Data-center GPUs
     evidence: "MSFT capex commentary FY2024"
+    as_of: 2024-01-01
+  - from: nvidia
+    to: google
+    relationship: supplies
+    note: Data-center GPUs
+    evidence: "GOOGL Cloud GPU offerings FY2024"
+    as_of: 2024-01-01
+  - from: nvidia
+    to: amazon
+    relationship: supplies
+    note: Data-center GPUs (AWS EC2 instances)
+    evidence: "AMZN AWS capacity commentary FY2024"
+    as_of: 2024-01-01
+  - from: nvidia
+    to: meta
+    relationship: supplies
+    note: Data-center GPUs for AI training clusters
+    evidence: "META H100 buildout / capex commentary FY2024"
+    as_of: 2024-01-01
+  - from: amd
+    to: microsoft
+    relationship: supplies
+    note: MI-series data-center accelerators
+    evidence: "MSFT AI accelerator diversification FY2024"
+    as_of: 2024-01-01
+  - from: broadcom
+    to: google
+    relationship: partner
+    note: Co-developed TPU networking / custom ASIC silicon
+    evidence: "AVGO custom-ASIC commentary; GOOGL TPU partnership"
+    as_of: 2024-01-01
+  # --- chips -> integrators (cloud-stage AI-server integrators) ---
+  - from: nvidia
+    to: dell
+    relationship: supplies
+    note: GPUs to Dell, a cloud-stage AI-server integrator
+    evidence: "DELL AI server backlog commentary FY2024"
+    as_of: 2024-01-01
+  - from: nvidia
+    to: supermicro
+    relationship: supplies
+    note: GPUs to Supermicro, a cloud-stage AI-server integrator
+    evidence: "SMCI AI server revenue commentary FY2024"
+    as_of: 2024-01-01
+  # --- integrators -> cloud ---
+  - from: dell
+    to: microsoft
+    relationship: supplies
+    note: Dell (AI-server integrator) ships GPU systems to hyperscalers
+    evidence: "DELL hyperscaler / enterprise AI server sales FY2024"
+    as_of: 2024-01-01
+  - from: supermicro
+    to: meta
+    relationship: supplies
+    note: Supermicro (AI-server integrator) ships GPU systems to hyperscalers
+    evidence: "SMCI hyperscaler AI server sales FY2024"
+    as_of: 2024-01-01
+  # --- BACK edges: cloud -> foundry (in-house accelerators fabbed at TSMC) ---
+  - from: google
+    to: tsmc
+    relationship: partner
+    note: in-house accelerator (TPU/Trainium) fabbed at TSMC
+    evidence: "GOOGL TPU fabricated at TSMC advanced nodes"
+    as_of: 2024-01-01
+  - from: amazon
+    to: tsmc
+    relationship: partner
+    note: in-house accelerator (TPU/Trainium) fabbed at TSMC
+    evidence: "AMZN Trainium/Inferentia fabricated at TSMC"
     as_of: 2024-01-01
