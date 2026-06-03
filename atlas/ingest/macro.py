@@ -49,7 +49,7 @@ def _csv_to_indexed_frame(text: str, series_id: str) -> pd.DataFrame:
 def fetch_macro(series_id: str, start: str = PRICE_START) -> pd.DataFrame:  # pragma: no cover
     def _dl() -> pd.DataFrame:
         resp = requests.get(
-            FRED_CSV_URL, params={"id": series_id, "cosd": start}, timeout=30
+            FRED_CSV_URL, params={"id": series_id, "cosd": start}, timeout=60
         )
         resp.raise_for_status()
         frame = _csv_to_indexed_frame(resp.text, series_id)
@@ -60,12 +60,34 @@ def fetch_macro(series_id: str, start: str = PRICE_START) -> pd.DataFrame:  # pr
     return normalize_macro(with_retry(_dl), series_id)
 
 
-def run() -> None:  # pragma: no cover
+def _empty_macro_frame() -> pd.DataFrame:
+    """Schema-correct, zero-row frame so dbt's macro parquet glob never matches nothing."""
+    return pd.DataFrame(
+        {
+            "series_id": pd.Series([], dtype="object"),
+            "date": pd.Series([], dtype="datetime64[ns]"),
+            "value": pd.Series([], dtype="float64"),
+        }
+    )
+
+
+def run() -> None:
     out_dir = Path(DATA_RAW) / "macro"
+    wrote_any = False
     for series_id in FRED_SERIES:
-        df = fetch_macro(series_id)
+        try:
+            df = fetch_macro(series_id)
+        except Exception as exc:  # noqa: BLE001 - tolerate a flaky FRED series, keep going
+            print(f"macro: SKIP {series_id} ({type(exc).__name__}: {exc})")
+            continue
         atomic_write_parquet(df, out_dir / f"{series_id}.parquet")
+        wrote_any = True
         print(f"macro: wrote {len(df)} rows for {series_id}")
+    if not wrote_any:
+        # All series failed (e.g. FRED unreachable): write an empty fallback so the
+        # downstream dbt model still builds instead of erroring on an empty glob.
+        atomic_write_parquet(_empty_macro_frame(), out_dir / "_empty.parquet")
+        print("macro: all series failed; wrote empty fallback parquet")
 
 
 if __name__ == "__main__":
