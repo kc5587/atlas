@@ -16,3 +16,12 @@ models:
         tests:
           - accepted_values:
               values: [equipment, foundry, chips, cloud]
+  - name: fundamentals_quarterly
+    columns:
+      - name: ticker
+        tests: [not_null]
+      - name: period_end
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [ticker, period_end]

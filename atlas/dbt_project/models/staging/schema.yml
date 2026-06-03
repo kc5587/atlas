@@ -20,3 +20,16 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [series_id, date]
+  - name: stg_fundamentals
+    columns:
+      - name: ticker
+        tests: [not_null]
+      - name: metric
+        tests:
+          - accepted_values:
+              values: [revenue, capex, gross_margin]
+      - name: value
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [cik, metric, period_end, accn]
