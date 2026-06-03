@@ -6,4 +6,6 @@ export default defineConfig({
   base: "./",
   publicDir: "static",          // copies static/data/*.json into dist/data/ — REQUIRED
   build: { outDir: "dist" },
+  // Vitest owns unit tests (*.test.ts); Playwright owns smoke specs (*.spec.ts).
+  test: { include: ["tests/**/*.test.ts"] },
 });

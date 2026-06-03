@@ -1,4 +1,4 @@
-.PHONY: setup ingest build analyze app all test lint web-data web-dev web-build
+.PHONY: setup ingest build analyze all test lint web-data web-dev web-build
 
 setup:
 	uv venv && uv pip install -e ".[dev]"
@@ -11,9 +11,6 @@ build:
 
 analyze:
 	python -m analysis.leadlag
-
-app:
-	streamlit run app/streamlit_app.py
 
 all: ingest build analyze
 

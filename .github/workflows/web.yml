@@ -1,0 +1,24 @@
+name: web
+on:
+  push:
+  pull_request:
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: atlas/web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci
+      - run: npx svelte-check --tsconfig ./tsconfig.json
+      - run: npx vitest run
+      - name: build fixture data
+        working-directory: atlas
+        run: |
+          uv venv && uv pip install -e ".[dev]"
+          uv run python web/tests/make_fixture_db.py /tmp/atlas_fixture.duckdb
+          uv run python web/export_data.py --db /tmp/atlas_fixture.duckdb --out web/static/data
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test

@@ -3,12 +3,12 @@
 Atlas maps the AI value chain and shows where to look with reproducible,
 quality-checked, free data.
 
-Live demo: _Streamlit Cloud URL pending._
+Live site: <https://kc5587.github.io/atlas/>
 
 ## Quickstart
 
 ```bash
-make setup && make all && make app
+make setup && make all && make web-data && make web-dev
 ```
 
 ## Architecture
@@ -27,12 +27,29 @@ flowchart LR
     K --> D
     D --> A["lead/lag analysis"]
     A --> DB["atlas.duckdb"]
-    DB --> UI["Streamlit map, dashboard, report"]
+    DB --> EX["web/export_data.py → static JSON"]
+    EX --> WEB["static data-story + explorable map (GitHub Pages)"]
 ```
 
 `value_chain.yml` is the single source of truth for the value-chain graph.
 `ingest/graph.py` validates it and writes `graph_nodes` and `graph_edges` into
 DuckDB before dbt consumes them as sources.
+
+## Front-end (static data-story + explorable map)
+
+The front-end is a static site (Vite + Svelte 5 + TypeScript) with no server:
+`web/export_data.py` turns the DuckDB marts into compact JSON, and the site loads
+that JSON once to render everything client-side — a stage-column value-chain map
+(D3), a scroll-driven narrative (scrollama), and a free-explore mode with pan/zoom,
+stage filters, and per-node drill-down. The nightly workflow exports the JSON,
+builds the site, and deploys it to GitHub Pages; the data pipeline is untouched.
+
+Run it locally:
+
+```bash
+make web-data   # export JSON from data/atlas.duckdb into web/static/data
+make web-dev    # start the Vite dev server
+```
 
 ## Data Refresh
 
@@ -72,8 +89,8 @@ and will be handled as a dedicated human step.
    Airflow/Prefect.
 9. **Geopolitical concentration risk** (Taiwan/Netherlands) is captured as graph
    metadata + narrative, not a quantitative risk model.
-10. **Hosting is best-effort** — free Streamlit Cloud sleeps when idle; not an HA
-    service. Desktop layout, not mobile-polished.
+10. **Hosting is best-effort** — a static GitHub Pages site rebuilt nightly; not an
+    HA service. Desktop layout, not mobile-polished.
 
 **One-line scope:** Atlas maps the AI value chain and shows *where to look* with
 reproducible, quality-checked, free data — it does **not** tell you what to trade,

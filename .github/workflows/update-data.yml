@@ -17,3 +17,23 @@ jobs:
       - run: uv venv && uv pip install -e ".[dev]"
       - run: uv run make all
       - run: uv run python scripts/publish_release.py
+
+  deploy-web:
+    needs: refresh
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write, contents: read }
+    environment: { name: github-pages }
+    concurrency: { group: "pages", cancel-in-progress: true }
+    defaults: { run: { working-directory: atlas } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: uv venv && uv pip install -e ".[dev]"
+      - run: uv run make all            # rebuild duckdb from the freshest data
+      - run: uv run python web/export_data.py --db data/atlas.duckdb --out web/static/data
+      - run: cd web && npm ci && npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: atlas/web/dist }
+      - uses: actions/deploy-pages@v4
