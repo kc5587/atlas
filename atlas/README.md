@@ -20,6 +20,7 @@ The implementation follows the lean, reproducible architecture described in the
 flowchart LR
     Y["yfinance prices"] --> I["validated Python ingest"]
     F["FRED macro"] --> I
+    E["SEC EDGAR fundamentals"] --> I
     S["value_chain.yml"] --> G["validated graph loader"]
     I --> P["atomic Parquet files"]
     P --> D["dbt-duckdb models and tests"]
@@ -34,6 +35,13 @@ flowchart LR
 `value_chain.yml` is the single source of truth for the value-chain graph.
 `ingest/graph.py` validates it and writes `graph_nodes` and `graph_edges` into
 DuckDB before dbt consumes them as sources.
+
+Layer 2 adds SEC EDGAR company fundamentals for US filers: revenue, capex, and
+gross margin. The analysis uses quarterly, filed-date-aligned capex lead/lag
+pairs to compare upstream AI buildout signals with downstream revenue and price
+returns. ASML and TSMC remain in the graph and price analysis, but their
+fundamentals are deferred to Layer 2b because foreign-filer XBRL is sparse and
+less comparable.
 
 ## Front-end (static data-story + explorable map)
 
