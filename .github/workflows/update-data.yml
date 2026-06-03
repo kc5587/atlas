@@ -20,18 +20,30 @@ jobs:
 
   deploy-web:
     needs: refresh
+    if: always()                       # ship the site even if the data refresh failed
     runs-on: ubuntu-latest
     permissions: { pages: write, id-token: write, contents: read }
     environment: { name: github-pages }
     concurrency: { group: "pages", cancel-in-progress: true }
     defaults: { run: { working-directory: atlas } }
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
       - run: uv venv && uv pip install -e ".[dev]"
-      - run: uv run make all            # rebuild duckdb from the freshest data
+      # Deploy from the last known-good published data release (not a live re-ingest), so
+      # FRED/yfinance flakiness in `refresh` never blocks the site.
+      - name: Fetch latest data release
+        run: |
+          mkdir -p data
+          TAG=$(gh release list --json tagName,createdAt \
+            --jq 'map(select(.tagName|startswith("data-")))|sort_by(.createdAt)|last|.tagName')
+          test -n "$TAG" || { echo "no data-* release found"; exit 1; }
+          echo "using data release $TAG"
+          gh release download "$TAG" --pattern atlas.duckdb --dir data
       - run: uv run python web/export_data.py --db data/atlas.duckdb --out web/static/data
       - run: cd web && npm ci && npm run build
       - uses: actions/upload-pages-artifact@v3
