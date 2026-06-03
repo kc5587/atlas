@@ -8,6 +8,7 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from export_data import downsample, export_all  # noqa: E402
+from tests.make_fixture_db import build as build_web_fixture  # noqa: E402
 
 
 def _fixture_db(path: Path) -> duckdb.DuckDBPyConnection:
@@ -44,6 +45,21 @@ def test_export_all_writes_expected_files(tmp_path):
     assert graph["edges"][0]["from_id"] == "nvidia"
     meta = json.loads((out / "meta.json").read_text())
     assert meta["schema_version"] == "2"
+
+
+def test_fixture_db_exports_fundamentals(tmp_path):
+    db = tmp_path / "fixture.duckdb"
+    build_web_fixture(db)
+    con = duckdb.connect(str(db), read_only=True)
+    out = tmp_path / "data"
+    export_all(con, out)
+    con.close()
+
+    series = json.loads((out / "series.json").read_text())
+    leadlag = json.loads((out / "leadlag.json").read_text())
+    assert "fundamentals" in series
+    assert series["fundamentals"]["NVDA"]["capex"][0]["value"] == 248000000.0
+    assert {row["pair_type"] for row in leadlag} >= {"fund_capex_rev", "fund_capex_price"}
 
 
 def test_export_all_missing_required_table_raises(tmp_path):

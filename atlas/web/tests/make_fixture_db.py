@@ -41,6 +41,14 @@ EDGES = [
 LEADLAG = [
     ("edge", "asml", "tsmc", 5, 0.6, 0.001, 0.02, 300, True),
     ("edge", "tsmc", "nvidia", 3, 0.45, 0.01, 0.04, 300, True),
+    ("fund_capex_rev", "nvidia", "microsoft", 1, 0.55, 0.01, 0.04, 12, False),
+    ("fund_capex_price", "nvidia", "nvidia", 1, 0.40, 0.03, 0.08, 12, False),
+]
+
+FUNDAMENTALS = [
+    ("NVDA", "2023-03-31", "2023-05-05", 7192000000.0, 248000000.0, 0.64),
+    ("NVDA", "2023-06-30", "2023-08-21", 13507000000.0, 289000000.0, 0.70),
+    ("MSFT", "2023-06-30", "2023-07-27", 56189000000.0, 8943000000.0, 0.69),
 ]
 
 
@@ -85,6 +93,16 @@ def build(path: Path) -> None:
             "INSERT INTO returns "
             "SELECT 'NVDA', DATE '2020-01-01' + INTERVAL (i) DAY, 0.001 "
             "FROM range(0, 400) t(i)"
+        )
+
+        con.execute(
+            "CREATE TABLE fundamentals_quarterly("
+            "ticker VARCHAR, period_end DATE, filed DATE, revenue DOUBLE, "
+            "capex DOUBLE, gross_margin DOUBLE)"
+        )
+        con.executemany(
+            "INSERT INTO fundamentals_quarterly VALUES (?, ?, ?, ?, ?, ?)",
+            FUNDAMENTALS,
         )
     finally:
         con.close()

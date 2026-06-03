@@ -16,7 +16,14 @@ SCHEMA_VERSION = "1"
 KEEP_RELEASES = 14
 # Tables whose row counts go into the manifest (skipped silently if absent).
 ROW_COUNT_TABLES = [
-    "prices_daily", "returns", "macro_daily", "graph_nodes", "graph_edges", "leadlag",
+    "prices_daily",
+    "returns",
+    "macro_daily",
+    "graph_nodes",
+    "graph_edges",
+    "leadlag",
+    "stg_fundamentals",
+    "fundamentals_quarterly",
 ]
 
 
