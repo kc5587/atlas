@@ -34,5 +34,12 @@ atlas/dbt_project/dbt_packages/
 atlas/dbt_project/logs/
 atlas/dbt_project/.user.yml
 
+# web build + generated data
+atlas/web/node_modules/
+atlas/web/dist/
+atlas/web/static/data/
+atlas/web/test-results/
+atlas/web/playwright-report/
+
 # os
 .DS_Store
