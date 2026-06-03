@@ -10,6 +10,8 @@ from config import (
     BOOTSTRAP_ITERS,
     DUCKDB_PATH,
     FDR_ALPHA,
+    FUND_MAX_LAG_QUARTERS,
+    FUND_NMIN,
     MACRO_NMIN,
     MAX_LAG_DAYS,
     PRICE_NMIN,
@@ -133,6 +135,35 @@ def _ticker_for_node(nodes: pd.DataFrame, node_id: str) -> str:
     return json.loads(row["tickers"].iloc[0])[0]
 
 
+def _fund_series(fundamentals: pd.DataFrame, ticker: str, col: str) -> pd.Series:
+    """Point-in-time quarterly series for one ticker, indexed by filed date."""
+    sub = fundamentals.loc[fundamentals["ticker"] == ticker, ["filed", col]].dropna()
+    if sub.empty:
+        return pd.Series(dtype=float)
+    filed = pd.to_datetime(sub["filed"])
+    series = pd.Series(sub[col].to_numpy(dtype=float), index=filed).sort_index()
+    return series[~series.index.duplicated(keep="first")]
+
+
+def _returns_on_filed_dates(
+    daily_returns: pd.Series, filed_index: pd.DatetimeIndex
+) -> pd.Series:
+    """Aggregate returns over filed-date quarterly intervals."""
+    if daily_returns.empty or filed_index.empty:
+        return pd.Series(dtype=float)
+    returns = daily_returns.sort_index()
+    dates = pd.DatetimeIndex(filed_index).sort_values().unique()
+    rows = []
+    previous: pd.Timestamp | None = None
+    for date in dates:
+        start = date - pd.DateOffset(months=3) if previous is None else previous
+        window = returns.loc[(returns.index > start) & (returns.index <= date)]
+        rows.append({"date": date, "value": window.sum() if not window.empty else np.nan})
+        previous = date
+    series = pd.DataFrame(rows).set_index("date")["value"].dropna()
+    return series.astype(float)
+
+
 def _stable_across_halves(left: pd.Series, right: pd.Series, lag: int) -> bool:
     half = len(left) // 2
     if half < 30:
@@ -147,6 +178,93 @@ def _stable_across_halves(left: pd.Series, right: pd.Series, lag: int) -> bool:
     return all(np.sign(p) == np.sign(lag) for p in peaks) if lag != 0 else all(p == 0 for p in peaks)
 
 
+def _lagged_arrays(left: pd.Series, right: pd.Series, lag: int) -> tuple[np.ndarray, np.ndarray]:
+    if lag >= 0:
+        return left.to_numpy()[: len(left) - lag], right.to_numpy()[lag:]
+    return left.to_numpy()[-lag:], right.to_numpy()[: len(right) + lag]
+
+
+def _peak_for_pair(left: pd.Series, right: pd.Series, max_lag: int) -> pd.Series | None:
+    table = cross_correlations(left, right, max_lag=max_lag).dropna(subset=["corr"])
+    if table.empty:
+        return None
+    return table.loc[table["corr"].abs().idxmax()]
+
+
+def _fund_capex_revenue_rows(
+    fundamentals: pd.DataFrame,
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    *,
+    iters: int,
+) -> list[dict]:
+    rows = []
+    for _, edge in edges.iterrows():
+        up = _fund_series(fundamentals, _ticker_for_node(nodes, edge["from_id"]), "capex")
+        down = _fund_series(fundamentals, _ticker_for_node(nodes, edge["to_id"]), "revenue")
+        left, right = align_pair(up, down)
+        if len(left) < FUND_NMIN:
+            continue
+        peak = _peak_for_pair(left, right, FUND_MAX_LAG_QUARTERS)
+        if peak is None:
+            continue
+        lag = int(peak["lag"])
+        x, y = _lagged_arrays(left, right, lag)
+        p = stationary_bootstrap_pvalue(x, y, iters=iters, block=2, seed=RANDOM_SEED)
+        rows.append(_leadlag_row("fund_capex_rev", edge["from_id"], edge["to_id"], peak, p, left, right))
+    return rows
+
+
+def _fund_capex_price_rows(
+    fundamentals: pd.DataFrame,
+    nodes: pd.DataFrame,
+    ret_by_ticker: dict[str, pd.Series],
+    *,
+    iters: int,
+) -> list[dict]:
+    rows = []
+    for _, node in nodes.iterrows():
+        ticker = json.loads(node["tickers"])[0]
+        if ticker not in ret_by_ticker:
+            continue
+        capex = _fund_series(fundamentals, ticker, "capex")
+        returns_q = _returns_on_filed_dates(ret_by_ticker[ticker], pd.DatetimeIndex(capex.index))
+        left, right = align_pair(capex, returns_q)
+        if len(left) < FUND_NMIN:
+            continue
+        peak = _peak_for_pair(left, right, FUND_MAX_LAG_QUARTERS)
+        if peak is None:
+            continue
+        lag = int(peak["lag"])
+        x, y = _lagged_arrays(left, right, lag)
+        p = stationary_bootstrap_pvalue(x, y, iters=iters, block=2, seed=RANDOM_SEED)
+        rows.append(_leadlag_row("fund_capex_price", node["id"], node["id"], peak, p, left, right))
+    return rows
+
+
+def _leadlag_row(
+    pair_type: str,
+    left_id: str,
+    right_id: str,
+    peak: pd.Series,
+    p_value: float,
+    left: pd.Series,
+    right: pd.Series,
+) -> dict:
+    lag = int(peak["lag"])
+    return {
+        "pair_type": pair_type,
+        "left": left_id,
+        "right": right_id,
+        "lag": lag,
+        "corr": float(peak["corr"]),
+        "p_value": p_value,
+        "q_value": np.nan,
+        "n_eff": int(peak["n"]),
+        "stable": _stable_across_halves(left, right, lag),
+    }
+
+
 def build_leadlag_table(
     returns: pd.DataFrame,
     macro: pd.DataFrame,
@@ -156,6 +274,7 @@ def build_leadlag_table(
     max_lag: int = MAX_LAG_DAYS,
     price_nmin: int = PRICE_NMIN,
     iters: int = BOOTSTRAP_ITERS,
+    fundamentals: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Compute lead/lag rows for supplier->customer edges (price pairs).
 
@@ -238,6 +357,10 @@ def build_leadlag_table(
                     }
                 )
 
+    if fundamentals is not None and not fundamentals.empty and not nodes.empty:
+        rows.extend(_fund_capex_revenue_rows(fundamentals, nodes, edges, iters=iters))
+        rows.extend(_fund_capex_price_rows(fundamentals, nodes, ret_by_ticker, iters=iters))
+
     df = pd.DataFrame(rows, columns=_LEADLAG_COLUMNS)
     if not df.empty:
         df["q_value"] = bh_fdr(df["p_value"].to_numpy())
@@ -252,7 +375,16 @@ def run() -> None:  # pragma: no cover
     macro = con.execute("SELECT series_id, date, value FROM macro_daily").fetchdf()
     nodes = con.execute("SELECT * FROM graph_nodes").fetchdf()
     edges = con.execute("SELECT * FROM graph_edges").fetchdf()
-    table = build_leadlag_table(returns, macro, nodes, edges)
+    try:
+        fundamentals = con.execute(
+            "SELECT ticker, period_end, filed, revenue, capex, gross_margin "
+            "FROM fundamentals_quarterly"
+        ).fetchdf()
+    except duckdb.CatalogException:
+        fundamentals = pd.DataFrame(
+            columns=["ticker", "period_end", "filed", "revenue", "capex", "gross_margin"]
+        )
+    table = build_leadlag_table(returns, macro, nodes, edges, fundamentals=fundamentals)
     con.register("ll", table)
     con.execute("CREATE OR REPLACE TABLE leadlag AS SELECT * FROM ll")
     con.unregister("ll")

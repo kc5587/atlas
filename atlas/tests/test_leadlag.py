@@ -122,3 +122,88 @@ def test_macro_pairs_use_native_frequency(tmp_path):
     assert not macro_rows.empty
     # n_eff reflects monthly periods (~96), not 2000 daily rows
     assert macro_rows["n_eff"].max() <= 96
+
+
+def test_fundamentals_capex_revenue_pair():
+    periods = pd.date_range("2016-03-31", periods=32, freq="QE")
+    filed = periods + pd.Timedelta(days=40)
+    rng = np.random.default_rng(11)
+    capex = rng.normal(100, 10, 32)
+    fundamentals = pd.DataFrame({
+        "ticker": ["up_t"] * 32 + ["down_t"] * 32,
+        "period_end": list(periods) * 2,
+        "filed": list(filed) * 2,
+        "revenue": [np.nan] * 32 + list(np.roll(capex, 1) * 5),
+        "capex": list(capex) + [np.nan] * 32,
+        "gross_margin": [np.nan] * 64,
+    })
+    nodes = pd.DataFrame({
+        "id": ["up", "down"],
+        "name": ["U", "D"],
+        "tickers": ['["up_t"]', '["down_t"]'],
+        "stage": ["foundry", "chips"],
+        "region": ["US", "US"],
+        "cik": ["1", "2"],
+    })
+    edges = pd.DataFrame({
+        "from_id": ["up"],
+        "to_id": ["down"],
+        "relationship": ["supplies"],
+        "note": [""],
+        "evidence": [""],
+        "as_of": ["2024-01-01"],
+    })
+    empty_ret = pd.DataFrame(columns=["ticker", "date", "log_return"])
+    empty_macro = pd.DataFrame(columns=["series_id", "date", "value"])
+    table = build_leadlag_table(
+        empty_ret,
+        empty_macro,
+        nodes,
+        edges,
+        fundamentals=fundamentals,
+        iters=100,
+    )
+    fund = table[table["pair_type"] == "fund_capex_rev"]
+    assert not fund.empty
+    assert fund["n_eff"].max() <= 32
+
+
+def test_fundamentals_capex_price_pair_uses_filed_dates():
+    periods = pd.date_range("2016-03-31", periods=32, freq="QE")
+    filed = periods + pd.Timedelta(days=40)
+    rng = np.random.default_rng(12)
+    capex = rng.normal(100, 10, 32)
+    returns = pd.DataFrame({
+        "ticker": ["up_t"] * len(filed),
+        "date": filed,
+        "log_return": np.roll(capex, 1) * 0.001,
+    })
+    fundamentals = pd.DataFrame({
+        "ticker": ["up_t"] * 32,
+        "period_end": periods,
+        "filed": filed,
+        "revenue": [np.nan] * 32,
+        "capex": capex,
+        "gross_margin": [np.nan] * 32,
+    })
+    nodes = pd.DataFrame({
+        "id": ["up"],
+        "name": ["U"],
+        "tickers": ['["up_t"]'],
+        "stage": ["foundry"],
+        "region": ["US"],
+        "cik": ["1"],
+    })
+    edges = pd.DataFrame(columns=["from_id", "to_id", "relationship", "note", "evidence", "as_of"])
+    empty_macro = pd.DataFrame(columns=["series_id", "date", "value"])
+    table = build_leadlag_table(
+        returns,
+        empty_macro,
+        nodes,
+        edges,
+        fundamentals=fundamentals,
+        iters=100,
+    )
+    fund = table[table["pair_type"] == "fund_capex_price"]
+    assert not fund.empty
+    assert fund["n_eff"].max() <= 32
