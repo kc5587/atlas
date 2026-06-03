@@ -10,11 +10,13 @@ nodes:
     tickers: [AMAT]
     stage: equipment
     region: US
+    cik: "0000006951"
   - id: lam_research
     name: Lam Research
     tickers: [LRCX]
     stage: equipment
     region: US
+    cik: "0000707549"
   # --- foundry ---
   - id: tsmc
     name: TSMC
@@ -27,57 +29,68 @@ nodes:
     tickers: [NVDA]
     stage: chips
     region: US
+    cik: "0001045810"
   - id: amd
     name: AMD
     tickers: [AMD]
     stage: chips
     region: US
+    cik: "0000002488"
   - id: broadcom
     name: Broadcom
     tickers: [AVGO]
     stage: chips
     region: US
+    cik: "0001730168"
   - id: micron
     name: Micron Technology
     tickers: [MU]
     stage: chips
     region: US
+    cik: "0000723125"
   # --- cloud ---
   - id: microsoft
     name: Microsoft
     tickers: [MSFT]
     stage: cloud
     region: US
+    cik: "0000789019"
   - id: google
     name: Alphabet (Google)
     tickers: [GOOGL]
     stage: cloud
     region: US
+    cik: "0001652044"
   - id: amazon
     name: Amazon
     tickers: [AMZN]
     stage: cloud
     region: US
+    cik: "0001018724"
   - id: meta
     name: Meta Platforms
     tickers: [META]
     stage: cloud
     region: US
+    cik: "0001326801"
   - id: oracle
     name: Oracle
     tickers: [ORCL]
     stage: cloud
     region: US
+    cik: "0001341439"
   - id: dell
     name: Dell Technologies
     tickers: [DELL]
     stage: cloud
     region: US
+    cik: "0001571996"
   - id: supermicro
     name: Super Micro Computer
     tickers: [SMCI]
     stage: cloud
     region: US
+    cik: "0001375365"
 edges:
   # --- equipment -> foundry ---
   - from: asml

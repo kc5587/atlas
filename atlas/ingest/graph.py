@@ -18,6 +18,7 @@ class Node(BaseModel):
     tickers: list[str]
     stage: Stage
     region: str
+    cik: str | None = None
 
     @field_validator("tickers")
     @classmethod
@@ -74,10 +75,11 @@ def load_graph(yaml_path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "tickers": json.dumps(n.tickers),
                 "stage": n.stage,
                 "region": n.region,
+                "cik": n.cik or "",
             }
             for n in nodes
         ],
-        columns=["id", "name", "tickers", "stage", "region"],
+        columns=["id", "name", "tickers", "stage", "region", "cik"],
     )
     edges_df = pd.DataFrame(
         [e.model_dump() for e in edges],

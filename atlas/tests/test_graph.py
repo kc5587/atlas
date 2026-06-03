@@ -55,12 +55,23 @@ nodes:
 edges: []
 """
 
+VALID_WITH_CIK = """
+nodes:
+  - id: nvidia
+    name: NVIDIA
+    tickers: [NVDA]
+    stage: chips
+    region: US
+    cik: "0001045810"
+edges: []
+"""
+
 
 def test_load_graph_returns_nodes_and_edges(tmp_path):
     p = tmp_path / "g.yml"
     p.write_text(VALID)
     nodes, edges = load_graph(p)
-    assert set(nodes.columns) == {"id", "name", "tickers", "stage", "region"}
+    assert set(nodes.columns) == {"id", "name", "tickers", "stage", "region", "cik"}
     assert set(edges.columns) == {
         "from_id", "to_id", "relationship", "note", "evidence", "as_of",
     }
@@ -89,3 +100,19 @@ def test_write_graph_to_duckdb(tmp_path):
     write_graph_to_duckdb(con, nodes, edges)
     assert con.execute("SELECT count(*) FROM graph_nodes").fetchone()[0] == 2
     assert con.execute("SELECT count(*) FROM graph_edges").fetchone()[0] == 1
+
+
+def test_node_carries_cik(tmp_path):
+    p = tmp_path / "g.yml"
+    p.write_text(VALID_WITH_CIK)
+    nodes, _ = load_graph(p)
+    assert "cik" in nodes.columns
+    assert nodes.loc[nodes["id"] == "nvidia", "cik"].iloc[0] == "0001045810"
+
+
+def test_node_cik_optional(tmp_path):
+    p = tmp_path / "g.yml"
+    p.write_text(VALID)
+    nodes, _ = load_graph(p)
+    assert "cik" in nodes.columns
+    assert nodes["cik"].isna().all() or (nodes["cik"] == "").all()
