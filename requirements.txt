@@ -1,6 +1,0 @@
-duckdb>=1.0
-networkx>=3.3
-pandas>=2.2
-plotly>=5.22
-requests>=2.32
-streamlit>=1.36
