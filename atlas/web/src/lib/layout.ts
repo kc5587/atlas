@@ -5,13 +5,24 @@ const STAGE_ORDER: Stage[] = ["equipment", "foundry", "chips", "cloud"];
 
 export interface PositionedNode extends Node { x: number; y: number; col: number; }
 export interface RoutedEdge extends Edge { isBack: boolean; }
-export interface LayoutOpts { width: number; height: number; padding?: number; }
+export interface LayoutOpts {
+  width: number;
+  height: number;
+  padding?: number;
+  // Extra space reserved on the left edge (e.g. for the story-mode narrative
+  // card). Columns start at `padding + leftInset` so the leftmost stage clears
+  // the card. Defaults to 0 (explore mode / no reservation).
+  leftInset?: number;
+}
 
 export function computeLayout(graph: Graph, opts: LayoutOpts) {
   const pad = opts.padding ?? 60;
+  const leftInset = opts.leftInset ?? 0;
   const cols = STAGE_ORDER;
+  const left = pad + leftInset;
+  const right = opts.width - pad;
   const colX = (i: number) =>
-    cols.length === 1 ? opts.width / 2 : pad + (i * (opts.width - 2 * pad)) / (cols.length - 1);
+    cols.length === 1 ? (left + right) / 2 : left + (i * (right - left)) / (cols.length - 1);
 
   const byStage = new Map<Stage, Node[]>();
   for (const s of cols) byStage.set(s, []);

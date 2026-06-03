@@ -19,10 +19,14 @@
     { key: "cloud", label: "CLOUD" },
   ];
   const HEADER_Y = 22;
+  // Reserve left space in STORY mode so the leftmost (equipment) column clears
+  // the ~460px narrative card. EXPLORE mode pans/zooms freely, so no inset.
+  const STORY_LEFT_INSET = 460;
 
   $effect(() => {
     if (!svgEl) return;
-    const { nodes, edges } = computeLayout(graph, { width, height });
+    const leftInset = mode === "story" ? STORY_LEFT_INSET : 0;
+    const { nodes, edges } = computeLayout(graph, { width, height, leftInset });
     const byId = new Map(nodes.map((n) => [n.id, n]));
     const svg = d3.select(svgEl);
     svg.selectAll("*").remove();
@@ -38,7 +42,9 @@
     // Stage column headers (don't rely on color alone)
     const colCount = STAGES.length;
     const pad = 60;
-    const colX = (i: number) => pad + (i * (width - 2 * pad)) / (colCount - 1);
+    const left = pad + leftInset;
+    const right = width - pad;
+    const colX = (i: number) => left + (i * (right - left)) / (colCount - 1);
     g.selectAll("text.stage-header").data(STAGES).join("text")
       .attr("class", "stage-header")
       .attr("x", (_, i) => colX(i))
