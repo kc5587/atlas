@@ -10,8 +10,9 @@
     "e2e": "playwright test"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^4",
     "@playwright/test": "^1.45",
+    "@sveltejs/vite-plugin-svelte": "^4",
+    "@types/d3": "^7.4.3",
     "svelte": "^5",
     "svelte-check": "^4",
     "typescript": "^5.5",
