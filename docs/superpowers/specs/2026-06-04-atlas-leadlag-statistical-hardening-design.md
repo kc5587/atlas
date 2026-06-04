@@ -181,12 +181,27 @@ confirmation rule.)
 Replace "bootstrap p at the pre-chosen peak lag" with a null over the **same
 one-sided search** the observed statistic used:
 
-- Observed statistic: `peak = max |corr_resid(left, right; lag)|` over
-  lags ∈ [1, `MAX_LAG_DAYS`].
+- Observed statistic — **signed** to match the directional *and* sign hypothesis
+  exactly: `peak = max (+corr_resid(left, right; lag))` over lags
+  ∈ [1, `MAX_LAG_DAYS`]. Using signed `+corr` (not `|corr|`) means the null is
+  calibrated precisely to the "positive lead correlation" hypothesis — negative
+  correlations don't inflate `null_max`, so the test is neither anti-conservative
+  nor needlessly conservative. An `inverse_lead` edge (negative corr at a positive
+  lag) simply produces a low signed peak and fails significance, which is correct;
+  it is still surfaced descriptively (§6.1).
 - Null: perturb **one** residual series independently so cross-dependence is
-  destroyed while each series keeps its own autocorrelation. Recompute the max
-  |corr| across the same positive-lag domain each iteration.
+  destroyed while each series keeps its own autocorrelation. Recompute the signed
+  max `+corr` across the same positive-lag domain each iteration.
 - `p_selection = (1 + #{ null_max ≥ peak }) / (iters + 1)`.
+
+**Block length (the one null parameter a reviewer can attack).** The stationary
+bootstrap's expected block length is **not** hardcoded; it is set **per series**
+by **Politis–White (2004) automatic block-length selection** (the standard
+data-driven rule, tied to the residual's decorrelation time). Too-short blocks
+destroy residual autocorrelation (anti-conservative p); too-long blocks leave too
+few effective resamples. The chosen block length per series is recorded in the
+output and asserted in the data-quality checks (§9). The existing
+`BOOTSTRAP_BLOCK = 20` becomes a fallback only.
 
 **Invariant (must-fix for null correctness) — stated in the module docstring and
 asserted by a test:** the resampling perturbs a *single* series, never the pair
@@ -268,8 +283,9 @@ reported as "significant in-sample, unstable OOS." Nothing is hidden.
 | `corr_resid` | residual corr at selected lag |
 | `lag` | selected lag (days; in [1, `MAX_LAG_DAYS`], positive ⇒ left leads right) |
 | `corr_contemporaneous` | residual corr at lag 0 (context, not a lead) |
-| `p_selection` | selection-aware (max-over-positive-lags) p-value |
-| `q_value` | BH-FDR q within this spec's 19-edge family |
+| `p_selection` | selection-aware, signed max-over-positive-lags p-value (full-sample) |
+| `q_value` | BH-FDR q within this spec's 19-edge family (full-sample) |
+| `block_len` | Politis–White block length used for this series' null |
 | `oos_corr_median` | median `corr_test` across walk-forward folds |
 | `oos_corr_iqr` | IQR of `corr_test` across folds |
 | `oos_sign_rate` | fraction of folds retaining train sign (descriptive) |
@@ -281,7 +297,14 @@ reported as "significant in-sample, unstable OOS." Nothing is hidden.
 | `inverse_lead` | true if positive-lag peak has the wrong (negative) sign |
 | `confirmed` | passes the §8 confirmation rule for this spec |
 | `survives_sector_control` | confirmed under M2, not just M1 |
-| `n_eff` | effective sample size used |
+| `n_eff` | effective sample size: `n / VIF`, where the variance-inflation factor accounts for residual autocorrelation (≈ `n` for near-white daily residuals) |
+
+**Top-line vs OOS lags (disambiguation).** The top-line fields `lag`,
+`p_selection`, `q_value`, `corr_resid` are the **full-sample, in-sample** statistic
+(the inferential gate). The walk-forward OOS (§7) **reselects the peak lag per
+fold** on each fold's train slice; `oos_corr_*` / `oos_sign_rate` summarize those
+per-fold-reselected lags. The two are deliberately distinct — one fixed lag does
+not drive both.
 
 Existing consumers (web `export_data.py`, Zod schema in `web/src/lib/types.ts`,
 `leadlag.json`) are updated additively; the map labels edges by confirmed status
@@ -305,6 +328,8 @@ These feed the planned `ARCHITECTURE.md`:
     window;
   - orthogonality: `corr(residual, factor) ≈ 0` per name/spec (tolerance-bounded);
   - null sanity: bootstrap null cross-corr mean ≈ 0;
+  - block length: Politis–White block length is finite, ≥ 1, and within a sane
+    bound per series (else fall back to `BOOTSTRAP_BLOCK` and flag);
   - power guard: every edge's post-split/embargo test window ≥ a configured
     minimum, else the edge is flagged (not silently fit).
 
@@ -340,9 +365,11 @@ isolation — consistent with the repo's existing analysis structure.
 - `residualize`: orthogonality of `sector_pure` vs SPY; residual orthogonal to
   factors; train-only betas never see test data; leave-one-out excludes the name.
 - `significance`: single-series-perturbation invariant; null cross-corr centered
-  on 0; one-sided search ignores negative lags; a synthetic downstream-leads
-  series is bucketed `contradicts_thesis`, not confirmed; p monotone in peak
-  magnitude; deterministic under seed.
+  on 0; signed one-sided statistic (negative-corr-at-positive-lag → low signed
+  peak → `inverse_lead`, not significant); one-sided search ignores negative lags;
+  a synthetic downstream-leads series is bucketed `contradicts_thesis`, not
+  confirmed; Politis–White block length is finite/bounded with fallback on
+  degenerate input; p monotone in peak magnitude; deterministic under seed.
 - `oos`: anchored expanding folds with fixed 252-d test windows; embargo removes
   the boundary window; per-fold train-only orthogonalization (no full-sample
   leak); `OOS_MIN_FOLDS` guard flags a deliberately-short synthetic edge; sign-
@@ -366,6 +393,22 @@ Coverage target ≥ 80% on the new analysis modules, per repo testing standard.
   *contradicting* the thesis rather than as confirmations."
 - "Walk-forward folds span COVID, the 2022 drawdown, and the 2023+ AI boom —
   signals that hold across folds aren't just the recent-regime artifact."
+
+**Known limitations (state these first, before a reviewer does):**
+
+- **Ex-post universe/value-chain selection (the deepest limitation).** The
+  universe and the 19 edges were specified *now*, knowing the AI boom happened.
+  No amount of per-edge de-beta fixes that the chain itself is defined ex-post:
+  *"This tests propagation **given** the chain, not the ex-ante discoverability of
+  it. The walk-forward OOS mitigates regime-fitting on the signal, but not
+  selection of the universe."* Naming this is a strength — an interviewer thinks
+  it within 30 seconds; saying it first separates "ran statistics" from
+  "understands what the statistics can't claim."
+- **Cross-family FWER.** Running M1 and M2 as two families each controlled at
+  FDR 0.10 means the document-wide false-confirmation rate exceeds 0.10. This is
+  defensible because the families are pre-registered a priori and answer
+  different questions — but it is noted here as a known limitation rather than
+  left for a reviewer to raise.
 
 ## 13. Deferred (explicitly not Priority 1)
 
