@@ -54,6 +54,9 @@ CONCEPT_TAGS: dict[str, list[str]] = {
 FUND_MAX_LAG_QUARTERS = 4
 FUND_NMIN = 12
 
+# H5 capex priced-in test: forward-return windows in trading days (~1Q, ~2Q).
+H5_FORWARD_HORIZONS: tuple[int, ...] = (63, 126)
+
 # Priority 1 hardening: factor model + OOS params.
 FACTOR_TICKERS: dict[str, str] = {"market": "SPY", "semis": "SOXX", "cloud": "IGV"}
 STAGE_SECTOR: dict[str, str] = {
