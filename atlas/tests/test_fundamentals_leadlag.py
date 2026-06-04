@@ -54,6 +54,67 @@ def test_capex_revenue_edge_detects_lead_and_direction():
     assert out["n_quarters"] > 0
 
 
+def test_capex_revenue_edges_aligns_offset_fiscal_calendars_between_endpoints():
+    """Upstream and downstream report on different fiscal calendars (e.g. NVDA's
+    late-July quarter vs MSFT's Sep-30 quarter). They must still align by calendar
+    quarter — exact-timestamp joins give 0 quarters (the live-data bug)."""
+    import json
+    n = 24
+    cal = pd.date_range("2016-03-31", periods=n, freq="QE")     # downstream: calendar q-ends
+    fis = cal - pd.Timedelta(days=33)                            # upstream: ~1 month earlier, same quarter
+    rng = np.random.default_rng(0)
+    capex = np.exp(np.cumsum(0.05 + 0.1 * rng.standard_normal(n)))
+    rev = np.exp(np.cumsum(0.05 + 0.1 * rng.standard_normal(n)))
+    peer = np.exp(np.cumsum(0.05 + 0.1 * rng.standard_normal(n)))
+    fundamentals = pd.concat([
+        pd.DataFrame({"ticker": "U", "period_end": fis, "capex": capex, "revenue": np.nan}),
+        pd.DataFrame({"ticker": "D", "period_end": cal, "capex": np.nan, "revenue": rev}),
+        pd.DataFrame({"ticker": "P", "period_end": cal, "capex": np.nan, "revenue": peer}),
+    ], ignore_index=True)
+    nodes = pd.DataFrame([
+        {"id": "u", "tickers": json.dumps(["U"])},
+        {"id": "d", "tickers": json.dumps(["D"])},
+        {"id": "p", "tickers": json.dumps(["P"])},
+    ])
+    edges = pd.DataFrame([{"from_id": "u", "to_id": "d"}])
+    out = capex_revenue_edges(fundamentals, nodes, edges, iters=50, seed=1)
+    assert len(out) == 1
+    assert out["n_quarters"].iloc[0] >= 9      # was 0 with exact-timestamp joins
+
+
+def test_fdr_family_excludes_degenerate_edges():
+    """BH-FDR must be computed over ELIGIBLE edges only; degenerate (no-data)
+    edges with p=1 must not inflate q for the real edge."""
+    import json
+    n = 24
+    cal = pd.date_range("2016-03-31", periods=n, freq="QE")
+    rng = np.random.default_rng(3)
+    capex = np.exp(np.cumsum(0.05 + 0.1 * rng.standard_normal(n)))
+    rev = capex  # strong real relationship for the eligible edge
+    peer = np.exp(np.cumsum(0.05 + 0.1 * rng.standard_normal(n)))
+    fundamentals = pd.concat([
+        pd.DataFrame({"ticker": "U", "period_end": cal, "capex": capex, "revenue": np.nan}),
+        pd.DataFrame({"ticker": "D", "period_end": cal, "capex": np.nan, "revenue": rev}),
+        pd.DataFrame({"ticker": "P", "period_end": cal, "capex": np.nan, "revenue": peer}),
+        # X has too few capex quarters -> edge x->d is appended but degenerate (NaN slope)
+        pd.DataFrame({"ticker": "X", "period_end": cal[:6], "capex": capex[:6], "revenue": np.nan}),
+    ], ignore_index=True)
+    nodes = pd.DataFrame([
+        {"id": "u", "tickers": json.dumps(["U"])},
+        {"id": "d", "tickers": json.dumps(["D"])},
+        {"id": "p", "tickers": json.dumps(["P"])},
+        {"id": "x", "tickers": json.dumps(["X"])},
+    ])
+    edges = pd.DataFrame([{"from_id": "u", "to_id": "d"}, {"from_id": "x", "to_id": "d"}])
+    out = capex_revenue_edges(fundamentals, nodes, edges, iters=100, seed=2)
+    elig = out[out["slope"].notna()]
+    degen = out[out["slope"].isna()]
+    assert len(elig) == 1 and len(degen) == 1
+    # eligible edge's q equals its own p (family size 1), not inflated by the degenerate edge
+    assert elig["q_value"].iloc[0] == elig["p_selection"].iloc[0]
+    assert degen["q_value"].isna().all()
+
+
 def test_capex_revenue_edges_handles_staggered_peer_fiscal_calendars():
     periods = pd.date_range("2015-03-31", periods=20, freq="QE")
     shifted = periods + pd.Timedelta(days=31)

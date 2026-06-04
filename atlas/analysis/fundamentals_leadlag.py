@@ -89,8 +89,12 @@ def capex_revenue_edges(fundamentals: pd.DataFrame, nodes: pd.DataFrame,
         sub = fundamentals.loc[fundamentals["ticker"] == ticker, ["period_end", col]].dropna()
         if sub.empty:
             return pd.Series(dtype=float)
-        return pd.Series(sub[col].to_numpy(float),
-                         index=pd.to_datetime(sub["period_end"])).sort_index()
+        # Bin period_end to its CALENDAR quarter so companies on different fiscal
+        # calendars align (NVDA's late-July quarter and MSFT's Sep-30 quarter both
+        # map to the same calendar-quarter label). Exact-timestamp joins give 0 rows.
+        q = pd.to_datetime(sub["period_end"]).dt.to_period("Q")
+        s = pd.Series(sub[col].to_numpy(float), index=q).sort_index()
+        return s[~s.index.duplicated(keep="last")]
 
     def ticker_of(node_id):
         row = nodes.loc[nodes["id"] == node_id]
@@ -120,8 +124,13 @@ def capex_revenue_edges(fundamentals: pd.DataFrame, nodes: pd.DataFrame,
     df = pd.DataFrame(rows)
     if not df.empty:
         from analysis.leadlag import bh_fdr
-        df["q_value"] = bh_fdr(df["p_selection"].to_numpy())
         df["slope_lo"] = df["slope_ci"].apply(lambda c: c[0])
         df["slope_hi"] = df["slope_ci"].apply(lambda c: c[1])
         df = df.drop(columns=["slope_ci"])
+        # FDR family = ELIGIBLE (computed) edges only; degenerate edges (NaN slope,
+        # insufficient overlap) must not inflate q for the real ones.
+        elig = df["slope"].notna()
+        df["q_value"] = np.nan
+        if elig.any():
+            df.loc[elig, "q_value"] = bh_fdr(df.loc[elig, "p_selection"].to_numpy())
     return df
