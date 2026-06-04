@@ -2,7 +2,7 @@ from config import H5_FORWARD_HORIZONS
 
 import numpy as np
 import pandas as pd
-from analysis.capex_price import capex_growth_at_filed, forward_excess_return
+from analysis.capex_price import capex_growth_at_filed, capex_price_edge, forward_excess_return
 
 
 def test_horizons_are_one_and_two_quarters():
@@ -43,3 +43,45 @@ def test_capex_growth_indexed_by_filed_date():
     g = capex_growth_at_filed(fund, "U")
     assert len(g) == 8
     assert (g.index == pd.DatetimeIndex(filed[4:])).all()
+
+
+def test_capex_price_edge_detects_forward_predictability():
+    rng = np.random.default_rng(0)
+    pe = pd.date_range("2016-03-31", periods=28, freq="QE")
+    filed = pe + pd.Timedelta(days=40)
+    g = rng.standard_normal(28)
+    capex_level = np.exp(np.cumsum(0.05 + 0.02 * np.concatenate([np.zeros(4), g[:-4]])))
+    fund = pd.DataFrame({"ticker": "U", "period_end": pe, "filed": filed, "capex": capex_level})
+    idx = pd.bdate_range("2015-06-01", periods=3000)
+    daily = pd.Series(0.0, index=idx)
+    cg = capex_growth_at_filed(fund, "U")
+    for f, val in cg.items():
+        win = daily.index[daily.index > f][:63]
+        daily.loc[win] += 0.0008 * val
+    daily += 0.0001 * pd.Series(rng.standard_normal(len(idx)), index=idx)
+    factors = {"SPY": pd.Series(0.0, index=idx), "SOXX": pd.Series(0.0, index=idx)}
+    out = capex_price_edge(cg, daily, factors, sector="SOXX", horizons=(63, 126), iters=200, seed=1)
+    assert out["slope"] > 0
+    assert out["horizon"] in (63, 126)
+    assert out["n_obs"] >= 10
+    assert out["contradicts_thesis"] is False
+
+
+def test_capex_price_edge_null_for_unrelated_returns():
+    rng = np.random.default_rng(2)
+    pe = pd.date_range("2016-03-31", periods=28, freq="QE")
+    filed = pe + pd.Timedelta(days=40)
+    fund = pd.DataFrame(
+        {
+            "ticker": "U",
+            "period_end": pe,
+            "filed": filed,
+            "capex": np.exp(np.cumsum(0.05 + 0.1 * rng.standard_normal(28))),
+        }
+    )
+    idx = pd.bdate_range("2015-06-01", periods=3000)
+    daily = 0.0002 * pd.Series(rng.standard_normal(len(idx)), index=idx)
+    factors = {"SPY": pd.Series(0.0, index=idx), "SOXX": pd.Series(0.0, index=idx)}
+    cg = capex_growth_at_filed(fund, "U")
+    out = capex_price_edge(cg, daily, factors, sector="SOXX", horizons=(63, 126), iters=200, seed=3)
+    assert out["p_selection"] > 0.1
