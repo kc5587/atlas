@@ -6,6 +6,8 @@ quarters) so we report effect sizes + CIs, NOT walk-forward.
 """
 from __future__ import annotations
 
+import json as _json
+
 import numpy as np
 import pandas as pd
 
@@ -75,3 +77,51 @@ def capex_revenue_edge(capex_growth: pd.Series, rev_growth: pd.Series,
         "p_selection": sig["p_selection"], "contradicts_thesis": sig["contradicts_thesis"],
         "n_quarters": int(len(paired)),
     }
+
+
+def capex_revenue_edges(fundamentals: pd.DataFrame, nodes: pd.DataFrame,
+                        edges: pd.DataFrame, *, iters: int, seed: int) -> pd.DataFrame:
+    """Driver: per eligible edge, hardened capex->revenue stats. Quarterly lags 1-4.
+
+    Cycle factor = leave-one-out cross-sectional mean of downstream revenue growth.
+    """
+    def series(ticker, col):
+        sub = fundamentals.loc[fundamentals["ticker"] == ticker, ["period_end", col]].dropna()
+        if sub.empty:
+            return pd.Series(dtype=float)
+        return pd.Series(sub[col].to_numpy(float),
+                         index=pd.to_datetime(sub["period_end"])).sort_index()
+
+    def ticker_of(node_id):
+        row = nodes.loc[nodes["id"] == node_id]
+        return _json.loads(row["tickers"].iloc[0])[0] if not row.empty else ""
+
+    # revenue YoY growth per ticker (for the cycle factor)
+    rev_growth = {}
+    for t in fundamentals["ticker"].unique():
+        g = yoy_growth(series(t, "revenue"))
+        if not g.empty:
+            rev_growth[t] = g
+
+    rows = []
+    for e in edges.itertuples():
+        ut, dt = ticker_of(e.from_id), ticker_of(e.to_id)
+        cg = yoy_growth(series(ut, "capex"))
+        rg = rev_growth.get(dt)
+        if cg.empty or rg is None:
+            continue
+        peers = [g for t, g in rev_growth.items() if t != dt]
+        if not peers:
+            continue
+        cycle = pd.concat(peers, axis=1, join="inner").dropna().mean(axis=1)
+        out = capex_revenue_edge(cg, rg, cycle, lag_min=1, lag_max=4, iters=iters, seed=seed)
+        out.update({"left": e.from_id, "right": e.to_id})
+        rows.append(out)
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        from analysis.leadlag import bh_fdr
+        df["q_value"] = bh_fdr(df["p_selection"].to_numpy())
+        df["slope_lo"] = df["slope_ci"].apply(lambda c: c[0])
+        df["slope_hi"] = df["slope_ci"].apply(lambda c: c[1])
+        df = df.drop(columns=["slope_ci"])
+    return df

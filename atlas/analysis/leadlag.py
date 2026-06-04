@@ -472,6 +472,13 @@ def run() -> None:  # pragma: no cover
     con.register("ll", combined)
     con.execute("CREATE OR REPLACE TABLE leadlag AS SELECT * FROM ll")
     con.unregister("ll")
+    from analysis.fundamentals_leadlag import capex_revenue_edges
+    h1 = capex_revenue_edges(fundamentals, nodes, edges,
+                             iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+    con.register("h1t", h1)
+    con.execute("CREATE OR REPLACE TABLE fundamentals_leadlag AS SELECT * FROM h1t")
+    con.unregister("h1t")
+    print(f"fundamentals_leadlag: wrote {len(h1)} capex->revenue edge rows")
     con.close()
     print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
 

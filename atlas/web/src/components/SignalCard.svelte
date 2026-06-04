@@ -24,6 +24,16 @@
     {#if signal.stat.q_value != null} · q={signal.stat.q_value}{/if}
     · n={signal.stat.n}
   </p>
+  {#if signal.chart.type === "capex_revenue_overlay"}
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.left} → {r.right}</span>
+          <b>slope {Number(r.slope).toFixed(2)}</b>
+          <span class="ci">[{Number(r.slope_lo).toFixed(2)}, {Number(r.slope_hi).toFixed(2)}]</span>
+          <span class="lag">lag {r.lag}Q · n={r.n_quarters}</span></li>
+      {/each}
+    </ul>
+  {/if}
   {#each signal.caveats as c}<p class="caveat">⚠ {c}</p>{/each}
 </article>
 
@@ -38,5 +48,9 @@
   .chain { margin:.5rem 0; padding-left:1.1rem; font-size:.82rem; }
   .chain span { opacity:.5; }
   .stat { font-variant-numeric:tabular-nums; font-size:.82rem; opacity:.9; }
+  .edges { list-style:none; padding:0; margin:.5rem 0 0; font-size:.78rem; }
+  .edges li { display:flex; gap:.5rem; justify-content:space-between; padding:.15rem 0;
+    border-top:1px solid #1b2740; }
+  .edges .ci,.edges .lag { opacity:.55; }
   .caveat { font-size:.74rem; color:#b58a6a; margin:.3rem 0 0; }
 </style>

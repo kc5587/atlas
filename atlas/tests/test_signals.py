@@ -1,6 +1,7 @@
 import pandas as pd
 
 from analysis.signals import h0_record
+from analysis.signals import h1_record
 
 
 def _edges_frame():
@@ -36,3 +37,24 @@ def test_h0_confirmed_when_some_edge_passes():
     rec = h0_record(df)
     assert rec["stat"]["value"] == 1
     assert rec["verdict"] != "null"
+
+
+def _h1_rows():
+    # one strong edge (suggestive), one contradicting
+    return pd.DataFrame([
+        {"left": "applied_materials", "right": "tsmc", "lag": 2, "corr": 0.4,
+         "slope": 0.6, "slope_lo": 0.2, "slope_hi": 1.0, "p_selection": 0.03,
+         "q_value": 0.06, "contradicts_thesis": False, "n_quarters": 34},
+        {"left": "nvidia", "right": "microsoft", "lag": 1, "corr": -0.1,
+         "slope": -0.2, "slope_lo": -0.5, "slope_hi": 0.1, "p_selection": 0.6,
+         "q_value": 0.6, "contradicts_thesis": True, "n_quarters": 30},
+    ])
+
+
+def test_h1_record_verdict_and_chain():
+    rec = h1_record(_h1_rows())
+    assert rec["id"] == "H1"
+    assert rec["verdict"] in {"confirmed", "suggestive", "null", "contradicts"}
+    assert rec["stat"]["n"] == 2
+    assert rec["chart"]["type"] == "capex_revenue_overlay"
+    assert len(rec["detail_rows"]) == 2
