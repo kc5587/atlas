@@ -2,7 +2,39 @@ import duckdb
 import pandas as pd
 
 from ingest import fundamentals
-from ingest.fundamentals import normalize_concept, pick_first_filed
+from ingest.fundamentals import normalize_concept, pick_first_filed, stitch_concepts
+
+
+def _tag_json(rows):
+    """rows: list of (end, filed, val)."""
+    return {"units": {"USD": [
+        {"start": end, "end": end, "val": val, "fy": 2020, "fp": "Q1",
+         "form": "10-Q", "filed": filed, "accn": f"a-{i}"}
+        for i, (end, filed, val) in enumerate(rows)
+    ]}}
+
+
+def test_stitch_concepts_fills_gaps_and_prefers_priority_tag():
+    # Tag A (priority 0) covers 2019-2020; Tag B (priority 1) covers 2020-2021.
+    a = normalize_concept(_tag_json([("2019-01-31", "2019-03-01", 100),
+                                     ("2020-01-31", "2020-03-01", 110)]),
+                          cik="x", ticker="T", metric="capex", concept="TagA")
+    b = normalize_concept(_tag_json([("2020-01-31", "2020-03-01", 999),
+                                     ("2021-01-31", "2021-03-01", 130)]),
+                          cik="x", ticker="T", metric="capex", concept="TagB")
+    out = stitch_concepts([a, b])
+    ends = sorted(str(d.date()) for d in out["period_end"])
+    assert ends == ["2019-01-31", "2020-01-31", "2021-01-31"]   # gap filled from B
+    # overlap quarter keeps the priority (A) value, not B's 999
+    v2020 = out.loc[out["period_end"] == pd.Timestamp("2020-01-31"), "value"].iloc[0]
+    assert v2020 == 110
+
+
+def test_stitch_concepts_handles_empty_and_single():
+    a = normalize_concept(_tag_json([("2020-01-31", "2020-03-01", 50)]),
+                          cik="x", ticker="T", metric="capex", concept="TagA")
+    assert stitch_concepts([]).empty
+    assert len(stitch_concepts([a])) == 1
 
 
 def _concept_json():

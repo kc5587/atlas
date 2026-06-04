@@ -100,6 +100,29 @@ def pick_first_filed(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def stitch_concepts(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combine per-tag frames (given in priority order) into one continuous series.
+
+    SEC filers drift their XBRL tag over time (e.g. NVDA capex moves from
+    PaymentsToAcquirePropertyPlantAndEquipment to PaymentsToAcquireProductiveAssets),
+    so a single tag truncates. We union all configured tags and, per period_end,
+    keep the highest-priority tag that reports it (earliest-filed within that tag),
+    filling coverage gaps with lower-priority fallbacks.
+    """
+    frames = [f for f in frames if f is not None and not f.empty]
+    if not frames:
+        return _empty_frame()
+    ranked = [f.assign(_prio=prio) for prio, f in enumerate(frames)]
+    allf = pd.concat(ranked, ignore_index=True)
+    allf = (
+        allf.sort_values(["_prio", "filed"])
+        .drop_duplicates(subset=["metric", "period_end"], keep="first")
+        .drop(columns="_prio")
+        .reset_index(drop=True)
+    )
+    return FUNDAMENTAL_SCHEMA.validate(allf[COLUMNS])
+
+
 def fetch_concept(cik: str, tag: str) -> dict | None:  # pragma: no cover
     """Fetch one us-gaap company concept; return None when a filer lacks the tag."""
 
@@ -126,6 +149,9 @@ def resolve_metric(cik: str, ticker: str, metric: str) -> pd.DataFrame:  # pragm
 def _resolve_from_tags(
     cik: str, ticker: str, tag_key: str, output_metric: str
 ) -> pd.DataFrame:  # pragma: no cover
+    """Collect EVERY configured tag and stitch them so tag drift over time does
+    not truncate coverage (see stitch_concepts)."""
+    frames: list[pd.DataFrame] = []
     for tag in CONCEPT_TAGS[tag_key]:
         try:
             data = fetch_concept(cik, tag)
@@ -136,8 +162,8 @@ def _resolve_from_tags(
             continue
         df = normalize_concept(data, cik=cik, ticker=ticker, metric=output_metric, concept=tag)
         if not df.empty:
-            return pick_first_filed(df)
-    return _empty_frame()
+            frames.append(pick_first_filed(df))
+    return stitch_concepts(frames)
 
 
 def _gross_margin(cik: str, ticker: str) -> pd.DataFrame:  # pragma: no cover
