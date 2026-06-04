@@ -789,8 +789,11 @@ def _returns_df():
     down = np.empty(1500)
     down[:3] = rng.standard_normal(3)
     down[3:] = up[:-3] + 0.6 * rng.standard_normal(1497)   # up leads down by 3
+    # IGV drawn last so the up/down RNG sequence is unchanged. The cloud node
+    # maps to IGV (chips -> SOXX, cloud -> IGV), mirroring production factors.
+    igv = 0.7 * spy + 0.5 * rng.standard_normal(1500)
     frames = []
-    for tkr, vals in {"SPY": spy, "SOXX": soxx, "UP": up, "DOWN": down}.items():
+    for tkr, vals in {"SPY": spy, "SOXX": soxx, "IGV": igv, "UP": up, "DOWN": down}.items():
         frames.append(pd.DataFrame({"ticker": tkr, "date": idx, "log_return": vals}))
     return pd.concat(frames, ignore_index=True)
 
