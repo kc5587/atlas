@@ -66,6 +66,47 @@ def test_h1_record_suggestive_when_ci_positive_but_fdr_not_passed():
     assert rec["verdict"] == "suggestive"
 
 
+def test_h1_confirmed_gates_on_selection_aware_q_not_the_ci():
+    # Edge passes FDR with positive slope but a CI that touches 0; the
+    # selection-conditional CI must NOT block 'confirmed' (review HIGH-2).
+    rows = pd.DataFrame([
+        {"left": "a", "right": "b", "lag": 2, "corr": 0.4, "slope": 0.5,
+         "slope_lo": -0.1, "slope_hi": 1.1, "p_selection": 0.02, "q_value": 0.05,
+         "contradicts_thesis": False, "n_quarters": 28},
+    ])
+    assert h1_record(rows)["verdict"] == "confirmed"
+
+
+def test_h1_n_counts_eligible_only_and_emits_no_nan():
+    import math
+    import numpy as np
+    rows = pd.DataFrame([
+        {"left": "a", "right": "b", "lag": 2, "corr": 0.4, "slope": 0.5,
+         "slope_lo": 0.2, "slope_hi": 0.8, "p_selection": 0.02, "q_value": 0.05,
+         "contradicts_thesis": False, "n_quarters": 28},
+        {"left": "x", "right": "b", "lag": 0, "corr": np.nan, "slope": np.nan,
+         "slope_lo": np.nan, "slope_hi": np.nan, "p_selection": 1.0,
+         "q_value": np.nan, "contradicts_thesis": False, "n_quarters": 2},
+    ])
+    rec = h1_record(rows)
+    assert rec["stat"]["n"] == 1                      # degenerate edge excluded from n
+    assert not math.isnan(rec["stat"]["value"])
+    assert all(not math.isnan(s["value"]) for s in rec["evidence_chain"])
+
+
+def test_h1_all_degenerate_is_null_without_nan():
+    import math
+    import numpy as np
+    rows = pd.DataFrame([
+        {"left": "a", "right": "b", "lag": 0, "corr": np.nan, "slope": np.nan,
+         "slope_lo": np.nan, "slope_hi": np.nan, "p_selection": 1.0,
+         "q_value": np.nan, "contradicts_thesis": False, "n_quarters": 1},
+    ])
+    rec = h1_record(rows)
+    assert rec["verdict"] == "null" and rec["stat"]["n"] == 0
+    assert not math.isnan(rec["stat"]["value"])
+
+
 def test_build_signal_records_appends_h1_when_table_exists():
     class Result:
         def __init__(self, df=None, row=None):

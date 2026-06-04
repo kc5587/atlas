@@ -41,36 +41,51 @@ def h0_record(leadlag_edges: pd.DataFrame) -> dict:
     }
 
 
+def _num(x, ndigits: int = 3) -> float:
+    """Round to a JSON-safe float; NaN/None -> 0.0 (card fields are required numbers)."""
+    return 0.0 if x is None or pd.isna(x) else round(float(x), ndigits)
+
+
 def h1_record(rows: pd.DataFrame) -> dict:
-    n = int(len(rows))
     # Eligible = enough quarters AND a finite slope (short/degenerate edges excluded).
     elig = rows[(rows["n_quarters"] > 0) & rows["slope"].notna()]
+    n = int(len(elig))
+    # Confirmation gate = the SELECTION-AWARE q (which already accounts for the
+    # 1–4Q lag search) + expected sign + not contradicting. The slope CI is
+    # conditional on the selected lag, so it does NOT gate "confirmed" — it only
+    # qualifies the weaker "suggestive" tier and serves as a descriptive effect size.
     confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
-                     & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
-    suggestive = elig[(elig["slope"] > 0) & (elig["slope_lo"] > 0)]
+                     & (~elig["contradicts_thesis"])]
+    suggestive = elig[(elig["slope"] > 0) & (elig["slope_lo"] > 0)
+                      & (~elig["contradicts_thesis"])]
+    contradicting = elig[elig["contradicts_thesis"]]
     if len(confirmed):
         verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
     elif len(suggestive):
         verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif elig["contradicts_thesis"].any():
-        verdict, best = "contradicts", elig.iloc[0]
+    elif len(contradicting):
+        verdict, best = "contradicts", contradicting.iloc[0]
+    elif len(elig):
+        verdict, best = "null", elig.iloc[0]
     else:
         verdict = "null"
-        best = elig.iloc[0] if len(elig) else rows.iloc[0]
+        best = rows.iloc[0] if len(rows) else pd.Series(dtype=float)
     return {
         "id": "H1", "title": "Capex → downstream revenue", "horizon": "quarterly",
         "claim": "Upstream capex leads downstream revenue by 1–4 quarters",
         "mechanism": "Real lead times; markets update on quarterly guidance",
         "verdict": verdict,
         "evidence_chain": [
-            {"stage": "raw |corr|", "metric": "|corr|", "value": round(float(elig["corr"].abs().median()), 3) if len(elig) else 0.0},
-            {"stage": "best edge corr", "metric": "corr", "value": round(float(best["corr"]), 3)},
-            {"stage": "best edge slope", "metric": "slope", "value": round(float(best["slope"]), 3)},
+            {"stage": "raw |corr|", "metric": "|corr|",
+             "value": _num(elig["corr"].abs().median()) if len(elig) else 0.0},
+            {"stage": "best edge corr", "metric": "corr", "value": _num(best.get("corr"))},
+            {"stage": "best edge slope", "metric": "slope", "value": _num(best.get("slope"))},
         ],
-        "stat": {"name": "slope", "value": round(float(best["slope"]), 3),
-                 "ci": [round(float(best["slope_lo"]), 3), round(float(best["slope_hi"]), 3)],
-                 "q_value": round(float(best["q_value"]), 3), "n": n},
+        "stat": {"name": "slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
         "caveats": [f"~{int(elig['n_quarters'].median()) if len(elig) else 0} quarters/edge → CIs, no walk-forward",
+                    "Slope CI is conditional on the selected lag; confirmation uses the selection-aware q",
                     "ASML/TSM excluded (no SEC fundamentals)"],
         "chart": {"type": "capex_revenue_overlay", "ref": "h1"},
         "detail_rows": elig[["left", "right", "lag", "corr", "slope", "slope_lo",

@@ -54,6 +54,14 @@ def test_capex_revenue_edge_detects_lead_and_direction():
     assert out["n_quarters"] > 0
 
 
+def test_bootstrap_slope_ci_returns_nan_for_constant_regressor():
+    # Constant x -> slope undefined; must be NaN (not a garbage lstsq min-norm value)
+    x = np.full(30, 2.0)
+    y = np.linspace(0, 1, 30)
+    lo, hi, slope = bootstrap_slope_ci(x, y, block=2, iters=100, seed=1)
+    assert np.isnan(slope) and np.isnan(lo) and np.isnan(hi)
+
+
 def test_capex_revenue_edges_aligns_offset_fiscal_calendars_between_endpoints():
     """Upstream and downstream report on different fiscal calendars (e.g. NVDA's
     late-July quarter vs MSFT's Sep-30 quarter). They must still align by calendar

@@ -27,9 +27,13 @@ def cycle_control(target_growth: pd.Series, cycle_growth: pd.Series) -> pd.Serie
                    axis=1, join="inner").dropna()
     if len(df) < 3:
         return pd.Series(dtype=float)
-    A = np.column_stack([np.ones(len(df)), df["c"].to_numpy()])
-    beta, *_ = np.linalg.lstsq(A, df["y"].to_numpy(), rcond=None)
-    return pd.Series(df["y"].to_numpy() - A @ beta, index=df.index)
+    y = df["y"].to_numpy()
+    c = df["c"].to_numpy()
+    if np.std(c) == 0:                        # constant cycle → only demean target
+        return pd.Series(y - y.mean(), index=df.index)
+    A = np.column_stack([np.ones(len(df)), c])
+    beta, *_ = np.linalg.lstsq(A, y, rcond=None)
+    return pd.Series(y - A @ beta, index=df.index)
 
 
 def bootstrap_slope_ci(x: np.ndarray, y: np.ndarray, *, block: int, iters: int,
@@ -38,10 +42,14 @@ def bootstrap_slope_ci(x: np.ndarray, y: np.ndarray, *, block: int, iters: int,
     x = np.asarray(x, float); y = np.asarray(y, float)
     n = len(x)
     def slope(xs, ys):
+        if len(xs) < 2 or np.std(xs) == 0:   # constant regressor → slope undefined
+            return np.nan
         A = np.column_stack([np.ones(len(xs)), xs])
         b, *_ = np.linalg.lstsq(A, ys, rcond=None)
         return b[1]
     point = slope(x, y)
+    if np.isnan(point):                       # degenerate (constant) regressor
+        return float("nan"), float("nan"), float("nan")
     rng = np.random.default_rng(seed)
     nblocks = int(np.ceil(n / block))
     draws = []
@@ -49,8 +57,8 @@ def bootstrap_slope_ci(x: np.ndarray, y: np.ndarray, *, block: int, iters: int,
         starts = rng.integers(0, max(1, n - block + 1), size=nblocks)
         idx = np.concatenate([np.arange(s, s + block) for s in starts])[:n]
         draws.append(slope(x[idx], y[idx]))
-    lo = float(np.percentile(draws, (1 - ci) / 2 * 100))
-    hi = float(np.percentile(draws, (1 + ci) / 2 * 100))
+    lo = float(np.nanpercentile(draws, (1 - ci) / 2 * 100))
+    hi = float(np.nanpercentile(draws, (1 + ci) / 2 * 100))
     return lo, hi, float(point)
 
 
