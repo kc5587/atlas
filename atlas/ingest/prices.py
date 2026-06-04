@@ -46,7 +46,9 @@ def fetch_prices(ticker: str, start: str = PRICE_START) -> pd.DataFrame:  # prag
 
 
 def run(tickers: list[str] | None = None) -> None:  # pragma: no cover
-    tickers = tickers or UNIVERSE
+    from config import FACTOR_TICKERS
+
+    tickers = tickers or (UNIVERSE + list(FACTOR_TICKERS.values()))
     out_dir = Path(DATA_RAW) / "prices"
     for t in tickers:
         df = fetch_prices(t)

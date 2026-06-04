@@ -53,3 +53,19 @@ CONCEPT_TAGS: dict[str, list[str]] = {
 
 FUND_MAX_LAG_QUARTERS = 4
 FUND_NMIN = 12
+
+# Priority 1 hardening: factor model + OOS params.
+FACTOR_TICKERS: dict[str, str] = {"market": "SPY", "semis": "SOXX", "cloud": "IGV"}
+STAGE_SECTOR: dict[str, str] = {
+    "equipment": "semis", "foundry": "semis", "chips": "semis", "cloud": "cloud",
+}
+LAG_MIN = 1
+LAG_MAX = MAX_LAG_DAYS  # one-sided, hypothesized direction only
+
+OOS_TEST_DAYS = 252
+OOS_STEP_DAYS = 252
+OOS_INIT_TRAIN_FRAC = 0.5
+OOS_EMBARGO_DAYS = MAX_LAG_DAYS
+OOS_MIN_FOLDS = 3
+OOS_SIGN_RATE_FLOOR = 0.6        # descriptive heuristic, NOT a significance test
+LEAVE_ONE_OUT_WEIGHT = 0.10      # ETF-weight threshold for leave-one-out variant

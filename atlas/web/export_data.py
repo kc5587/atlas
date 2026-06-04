@@ -35,6 +35,8 @@ def _criticality(node_id: str, edges: list[dict]) -> float:
 
 
 def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
+    from config import FACTOR_TICKERS
+
     for t in REQUIRED:
         if not _has_table(con, t):
             raise RuntimeError(f"missing required table: {t}")
@@ -69,11 +71,14 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
 
     prices: dict[str, list[dict]] = {}
     if _has_table(con, "returns"):
+        factor_set = set(FACTOR_TICKERS.values())
         df = con.execute(
             "SELECT ticker, date, sum(log_return) OVER (PARTITION BY ticker ORDER BY date) AS cum "
             "FROM returns ORDER BY ticker, date"
         ).df()
         for ticker, grp in df.groupby("ticker"):
+            if ticker in factor_set:
+                continue
             pts = [{"date": str(d.date()), "value": float(v)}
                    for d, v in zip(grp["date"], grp["cum"])]
             prices[ticker] = downsample(pts, max_points=400)
