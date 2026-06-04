@@ -30,7 +30,7 @@ from config import (
 )
 from analysis.oos import oos_stability
 from analysis.residualize import residual_for_spec
-from analysis.significance import _corr_at_lag, _signed_peak, selection_aware
+from analysis.significance import _corr_at_lag, selection_aware
 
 
 def log_returns(prices: pd.Series) -> pd.Series:
