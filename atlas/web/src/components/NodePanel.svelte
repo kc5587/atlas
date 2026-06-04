@@ -31,7 +31,7 @@
 
 <style>
   .panel {
-    position: absolute; top: 1rem; right: 1rem; z-index: 5; width: 360px;
+    position: fixed; top: 1rem; right: 1rem; z-index: 5; width: min(360px, calc(100vw - 2rem));
     background: #111a2b; color: #e8eef6; padding: 1rem 1.2rem; border-radius: 12px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   }

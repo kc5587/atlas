@@ -33,3 +33,17 @@ test("node click targets are forgiving around the circle", async ({ page }) => {
 
   await expect(page.locator("aside.panel")).toBeVisible();
 });
+
+test("details panel opens in the current viewport after scrolling", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("g.node").first()).toBeVisible({ timeout: 10_000 });
+  await page.mouse.wheel(0, 20_000);
+  await page.waitForTimeout(800);
+
+  await page.locator("g.node").first().click();
+
+  const box = await page.locator("aside.panel").boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeLessThan(800);
+});
