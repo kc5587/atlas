@@ -9,14 +9,27 @@ from config import (
     BOOTSTRAP_BLOCK,
     BOOTSTRAP_ITERS,
     DUCKDB_PATH,
+    FACTOR_TICKERS,
     FDR_ALPHA,
     FUND_MAX_LAG_QUARTERS,
     FUND_NMIN,
+    LAG_MAX,
+    LAG_MIN,
     MACRO_NMIN,
     MAX_LAG_DAYS,
+    OOS_EMBARGO_DAYS,
+    OOS_INIT_TRAIN_FRAC,
+    OOS_MIN_FOLDS,
+    OOS_SIGN_RATE_FLOOR,
+    OOS_STEP_DAYS,
+    OOS_TEST_DAYS,
     PRICE_NMIN,
     RANDOM_SEED,
+    STAGE_SECTOR,
 )
+from analysis.oos import oos_stability
+from analysis.residualize import residual_for_spec
+from analysis.significance import _corr_at_lag, _signed_peak, selection_aware
 
 
 def log_returns(prices: pd.Series) -> pd.Series:
@@ -126,6 +139,8 @@ def bh_fdr(pvalues: np.ndarray) -> np.ndarray:
 _LEADLAG_COLUMNS = [
     "pair_type", "left", "right", "lag", "corr", "p_value", "q_value", "n_eff", "stable",
 ]
+
+SPECS = {"M1_market": "M1", "M2_market_sector": "M2"}
 
 
 def _ticker_for_node(nodes: pd.DataFrame, node_id: str) -> str:
@@ -367,6 +382,67 @@ def build_leadlag_table(
     return df
 
 
+def build_hardened_edges(returns, nodes, edges, *, iters, seed) -> list[dict]:
+    ret = {t: g.set_index("date")["log_return"].sort_index()
+           for t, g in returns.groupby("ticker")}
+    factors = {etf: ret[etf] for etf in FACTOR_TICKERS.values() if etf in ret}
+    stage = {r.id: r.stage for r in nodes.itertuples()}
+    rows: list[dict] = []
+    for spec_label, spec in SPECS.items():
+        spec_rows = []
+        for e in edges.itertuples():
+            lt = _ticker_for_node(nodes, e.from_id)
+            rt = _ticker_for_node(nodes, e.to_id)
+            if lt not in ret or rt not in ret:
+                continue
+            sec_l = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(e.from_id), ""))
+            sec_r = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(e.to_id), ""))
+            train = ret[lt].index[: int(len(ret[lt]) * OOS_INIT_TRAIN_FRAC)]
+            left = residual_for_spec(ret[lt], factors, sector=sec_l, spec=spec, train_index=train)
+            right = residual_for_spec(ret[rt], factors, sector=sec_r, spec=spec, train_index=train)
+            paired = pd.concat([left.rename("l"), right.rename("r")], axis=1, join="inner").dropna()
+            if len(paired) < PRICE_NMIN:
+                continue
+            raw = _corr_at_lag(ret[lt].reindex(paired.index).to_numpy(),
+                               ret[rt].reindex(paired.index).to_numpy(), LAG_MIN)
+            sig = selection_aware(paired["l"].to_numpy(), paired["r"].to_numpy(),
+                                  lag_min=LAG_MIN, lag_max=LAG_MAX, iters=iters, seed=seed)
+            oos = oos_stability(left, right, lag_min=LAG_MIN, lag_max=LAG_MAX,
+                                test_days=OOS_TEST_DAYS, step_days=OOS_STEP_DAYS,
+                                init_train_frac=OOS_INIT_TRAIN_FRAC, embargo=OOS_EMBARGO_DAYS)
+            spec_rows.append({
+                "pair_type": "edge", "left": e.from_id, "right": e.to_id,
+                # Legacy-compatible aliases so existing Zod schema + map keep working:
+                "corr": sig["corr"], "p_value": sig["p_selection"],
+                "factor_model": spec_label, "corr_raw": raw, "corr_resid": sig["corr"],
+                "lag": sig["lag"], "corr_contemporaneous": sig["corr_contemporaneous"],
+                "p_selection": sig["p_selection"], "block_len": sig["block_len"],
+                "best_neg_lag_corr": sig["best_neg_lag_corr"],
+                "contradicts_thesis": sig["contradicts_thesis"], "inverse_lead": sig["inverse_lead"],
+                "n_eff": len(paired), "n_folds": oos["n_folds"],
+                "oos_corr_median": oos["oos_corr_median"], "oos_corr_iqr": oos["oos_corr_iqr"],
+                "oos_sign_rate": oos["oos_sign_rate"], "fold_date_ranges": json.dumps(oos["fold_date_ranges"]),
+            })
+        # Per-spec BH-FDR over this family.
+        if spec_rows:
+            q = bh_fdr(np.array([r["p_selection"] for r in spec_rows]))
+            for r, qv in zip(spec_rows, q):
+                r["q_value"] = float(qv)
+                r["m"] = len(spec_rows)
+                r["confirmed"] = bool(
+                    qv <= FDR_ALPHA and not r["contradicts_thesis"]
+                    and not r["inverse_lead"] and r["corr_resid"] > 0
+                    and r["n_folds"] >= OOS_MIN_FOLDS and r["oos_sign_rate"] >= OOS_SIGN_RATE_FLOOR
+                )
+                r["stable"] = r["confirmed"]  # legacy alias consumed by the map's edgeStyle
+        rows.extend(spec_rows)
+    # survives_sector_control: confirmed under M2.
+    m2 = {(r["left"], r["right"]) for r in rows if r["factor_model"] == "M2_market_sector" and r["confirmed"]}
+    for r in rows:
+        r["survives_sector_control"] = (r["left"], r["right"]) in m2
+    return rows
+
+
 def run() -> None:  # pragma: no cover
     import duckdb
 
@@ -384,12 +460,16 @@ def run() -> None:  # pragma: no cover
         fundamentals = pd.DataFrame(
             columns=["ticker", "period_end", "filed", "revenue", "capex", "gross_margin"]
         )
-    table = build_leadlag_table(returns, macro, nodes, edges, fundamentals=fundamentals)
-    con.register("ll", table)
+    legacy = build_leadlag_table(returns, macro, nodes, edges, fundamentals=fundamentals)
+    non_edge = legacy[legacy["pair_type"] != "edge"]
+    hardened = pd.DataFrame(build_hardened_edges(
+        returns, nodes, edges, iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED))
+    combined = pd.concat([non_edge, hardened], ignore_index=True)
+    con.register("ll", combined)
     con.execute("CREATE OR REPLACE TABLE leadlag AS SELECT * FROM ll")
     con.unregister("ll")
     con.close()
-    print(f"leadlag: wrote {len(table)} rows (alpha={FDR_ALPHA})")
+    print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
 
 
 if __name__ == "__main__":
