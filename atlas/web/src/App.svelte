@@ -8,6 +8,7 @@
   import Scroller from "./components/Scroller.svelte";
   import NodePanel from "./components/NodePanel.svelte";
   import Controls from "./components/Controls.svelte";
+  import SignalLab from "./components/SignalLab.svelte";
 
   let error = $state<string | null>(null);
   let data = $state<Awaited<ReturnType<typeof loadAll>> | null>(null);
@@ -68,7 +69,7 @@
         leadlag={data.leadlag}
         highlight={highlight}
         showLeadLag={scene?.showLeadLag ?? false}
-        mode={$mode}
+        mode={$mode === "lab" ? "story" : $mode}
         onSelect={(id) => selectedNode.set(id)}
       />
     </div>
@@ -93,6 +94,12 @@
       <Controls stages={data.meta.stages} active={stageFilter} onToggle={toggleStage} />
     {/if}
 
+    {#if $mode === "lab"}
+      <SignalLab />
+    {:else}
+      <button class="lab-entry" onclick={() => mode.set("lab")}>Signal Lab</button>
+    {/if}
+
     <p class="caption">Correlation, not causation. Edge styling reflects measured lead/lag, not proven cause.</p>
   {/if}
 </main>
@@ -109,5 +116,8 @@
     background: rgba(13, 20, 34, 0.7); padding: 0.3rem 0.7rem; border-radius: 8px;
     pointer-events: none; text-align: center; max-width: 90vw;
   }
+  .lab-entry { position: fixed; top: 1rem; left: 1rem; z-index: 6;
+    background: #1b2740; color: #cfe0f5; border: 0; border-radius: 8px;
+    padding: .4rem .8rem; cursor: pointer; }
   main { position: relative; }
 </style>
