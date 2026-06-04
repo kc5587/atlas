@@ -37,4 +37,15 @@ describe("data parsing", () => {
     expect(ll[0].factor_model).toBe("M2_market_sector");
     expect(ll[0].confirmed).toBe(true);
   });
+
+  it("parses legacy lead/lag rows with null hardening fields", () => {
+    const ll = parseLeadLag([
+      { pair_type: "macro", left: "nvidia", right: "DFF", lag: 2,
+        corr: 0.2, p_value: 0.3, q_value: 0.4, n_eff: 80, stable: false,
+        factor_model: null, p_selection: null, oos_sign_rate: null,
+        confirmed: null, survives_sector_control: null,
+        contradicts_thesis: null, inverse_lead: null },
+    ]);
+    expect(ll[0].factor_model).toBeNull();
+  });
 });

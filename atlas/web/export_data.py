@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import math
 import json
+from numbers import Real
 from pathlib import Path
 
 import duckdb
@@ -27,6 +29,28 @@ def downsample(points: list[dict], *, max_points: int) -> list[dict]:
     step = (n - 1) / (max_points - 1)
     idx = sorted({round(i * step) for i in range(max_points)} | {0, n - 1})
     return [points[i] for i in idx]
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, Real):
+        number = float(value)
+        if math.isnan(number) or math.isinf(number):
+            return None
+        if hasattr(value, "item"):
+            return value.item()
+    return value
+
+
+def _write_json(path: Path, value, *, default=None) -> None:
+    path.write_text(json.dumps(_json_safe(value), default=default, allow_nan=False))
 
 
 def _criticality(node_id: str, edges: list[dict]) -> float:
@@ -64,10 +88,10 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
             "cik": n["cik"] or None,
             "criticality": _criticality(n["id"], edges),
         })
-    (out_dir / "graph.json").write_text(json.dumps({"nodes": nodes, "edges": edges}))
+    _write_json(out_dir / "graph.json", {"nodes": nodes, "edges": edges})
 
     leadlag = con.execute("SELECT * FROM leadlag").df().to_dict("records")
-    (out_dir / "leadlag.json").write_text(json.dumps(leadlag, default=str))
+    _write_json(out_dir / "leadlag.json", leadlag, default=str)
 
     prices: dict[str, list[dict]] = {}
     if _has_table(con, "returns"):
@@ -97,12 +121,12 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
             fund[ticker] = {"revenue": col("revenue"), "capex": col("capex"),
                             "gross_margin": col("gross_margin")}
         series["fundamentals"] = fund
-    (out_dir / "series.json").write_text(json.dumps(series))
+    _write_json(out_dir / "series.json", series)
 
     from analysis.signals import build_signal_records
 
     signals = build_signal_records(con)
-    (out_dir / "signals.json").write_text(json.dumps(signals, default=str))
+    _write_json(out_dir / "signals.json", signals, default=str)
 
     tickers = sorted({t for n in nodes for t in n["tickers"]})
     stages = ["equipment", "foundry", "chips", "cloud"]
@@ -110,7 +134,7 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
         "generated_at": con.execute("SELECT now()").fetchone()[0].isoformat(),
         "schema_version": SCHEMA_VERSION, "tickers": tickers, "stages": stages,
     }
-    (out_dir / "meta.json").write_text(json.dumps(meta, default=str))
+    _write_json(out_dir / "meta.json", meta, default=str)
 
 
 def main() -> None:

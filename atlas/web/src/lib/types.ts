@@ -17,16 +17,16 @@ export const LeadLagZ = z.object({
   corr: z.number(), p_value: z.number(), q_value: z.number(),
   n_eff: z.number(), stable: z.boolean(),
   // Priority 1 hardening (optional; present on hardened edge rows):
-  factor_model: z.string().optional(),
+  factor_model: z.string().nullable().optional(),
   corr_raw: z.number().nullable().optional(),
   corr_resid: z.number().nullable().optional(),
-  p_selection: z.number().optional(),
-  oos_sign_rate: z.number().optional(),
+  p_selection: z.number().nullable().optional(),
+  oos_sign_rate: z.number().nullable().optional(),
   oos_corr_median: z.number().nullable().optional(),
-  confirmed: z.boolean().optional(),
-  survives_sector_control: z.boolean().optional(),
-  contradicts_thesis: z.boolean().optional(),
-  inverse_lead: z.boolean().optional(),
+  confirmed: z.boolean().nullable().optional(),
+  survives_sector_control: z.boolean().nullable().optional(),
+  contradicts_thesis: z.boolean().nullable().optional(),
+  inverse_lead: z.boolean().nullable().optional(),
 });
 export const SeriesPointZ = z.object({ date: z.string(), value: z.number().nullable() });
 export const SeriesZ = z.object({
