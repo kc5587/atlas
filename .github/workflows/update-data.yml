@@ -16,7 +16,7 @@ jobs:
       ATLAS_SEC_USER_AGENT: ${{ secrets.ATLAS_SEC_USER_AGENT }}
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: uv venv && uv pip install -e ".[dev]"
       - run: uv run make all
       - run: uv run python scripts/publish_release.py
@@ -33,7 +33,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.2.0
       - uses: actions/setup-node@v5
         with: { node-version: "24" }
       - run: uv venv && uv pip install -e ".[dev]"
