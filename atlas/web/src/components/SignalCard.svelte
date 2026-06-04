@@ -34,6 +34,17 @@
       {/each}
     </ul>
   {/if}
+  {#if signal.chart.type === "capex_price"}
+    <p class="legend">Confirmed = <b>not yet priced in</b> · Null = priced in</p>
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.left} → {r.right}</span>
+          <b>slope {Number(r.slope).toFixed(2)}</b>
+          <span class="ci">[{Number(r.slope_lo).toFixed(2)}, {Number(r.slope_hi).toFixed(2)}]</span>
+          <span class="lag">{r.horizon}d · n={r.n_obs}</span></li>
+      {/each}
+    </ul>
+  {/if}
   {#each signal.caveats as c}<p class="caveat">⚠ {c}</p>{/each}
 </article>
 
@@ -48,6 +59,7 @@
   .chain { margin:.5rem 0; padding-left:1.1rem; font-size:.82rem; }
   .chain span { opacity:.5; }
   .stat { font-variant-numeric:tabular-nums; font-size:.82rem; opacity:.9; }
+  .legend { font-size:.74rem; opacity:.7; margin:.4rem 0 .2rem; }
   .edges { list-style:none; padding:0; margin:.5rem 0 0; font-size:.78rem; }
   .edges li { display:flex; gap:.5rem; justify-content:space-between; padding:.15rem 0;
     border-top:1px solid #1b2740; }

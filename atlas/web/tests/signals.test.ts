@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { render } from "svelte/server";
+import SignalCard from "../src/components/SignalCard.svelte";
 import { parseSignals } from "../src/lib/signals";
 
 const valid = [{
@@ -18,5 +20,20 @@ describe("signals parsing", () => {
   it("rejects an invalid verdict", () => {
     const bad = [{ ...valid[0], verdict: "amazing" }];
     expect(() => parseSignals(bad)).toThrow();
+  });
+  it("renders the capex price legend and edge rows", () => {
+    const [signal] = parseSignals([{
+      ...valid[0],
+      id: "H5",
+      chart: { type: "capex_price", ref: "h5" },
+      detail_rows: [{
+        left: "broadcom", right: "google", horizon: 63, slope: 0.6,
+        slope_lo: 0.2, slope_hi: 1.0, n_obs: 25,
+      }],
+    }]);
+    const { body } = render(SignalCard, { props: { signal } });
+    expect(body).toContain("not yet priced in");
+    expect(body).toContain("broadcom");
+    expect(body).toContain("63d");
   });
 });
