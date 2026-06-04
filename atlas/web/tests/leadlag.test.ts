@@ -23,4 +23,13 @@ describe("leadlag styling", () => {
   it("derives pulse delay from |lag|", () => {
     expect(edgeStyle(rows[0], 0.1).pulseDelayMs).toBeGreaterThan(0);
   });
+  it("prefers the M2 (sector-controlled) row when both specs are present", () => {
+    const rows: LeadLag[] = [
+      { pair_type: "edge", left: "nvidia", right: "microsoft", lag: 2, corr: 0.5,
+        p_value: 0.01, q_value: 0.04, n_eff: 1200, stable: true, factor_model: "M1_market" },
+      { pair_type: "edge", left: "nvidia", right: "microsoft", lag: 3, corr: 0.3,
+        p_value: 0.02, q_value: 0.06, n_eff: 1200, stable: false, factor_model: "M2_market_sector" },
+    ];
+    expect(leadLagFor(rows, "nvidia", "microsoft")?.factor_model).toBe("M2_market_sector");
+  });
 });

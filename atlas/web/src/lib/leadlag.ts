@@ -2,9 +2,10 @@
 import type { LeadLag } from "./types";
 
 export function leadLagFor(rows: LeadLag[], from: string, to: string): LeadLag | undefined {
-  return rows.find(
+  const matches = rows.filter(
     (r) => (r.left === from && r.right === to) || (r.left === to && r.right === from),
   );
+  return matches.find((r) => r.factor_model === "M2_market_sector") ?? matches[0];
 }
 
 export interface EdgeStyle { width: number; significant: boolean; pulseDelayMs: number; opacity: number; }
