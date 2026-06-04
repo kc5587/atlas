@@ -2,7 +2,7 @@ from config import H5_FORWARD_HORIZONS
 
 import numpy as np
 import pandas as pd
-from analysis.capex_price import forward_excess_return
+from analysis.capex_price import capex_growth_at_filed, forward_excess_return
 
 
 def test_horizons_are_one_and_two_quarters():
@@ -32,3 +32,14 @@ def test_forward_excess_return_nan_when_no_future_data():
     factors = {"SPY": pd.Series(0.0, index=idx), "SOXX": pd.Series(0.0, index=idx)}
     r = forward_excess_return(asset, factors, sector="SOXX", filed=idx[-1], horizon_days=63)
     assert np.isnan(r)
+
+
+def test_capex_growth_indexed_by_filed_date():
+    pe = pd.date_range("2018-03-31", periods=12, freq="QE")
+    filed = pe + pd.Timedelta(days=40)
+    fund = pd.DataFrame(
+        {"ticker": "U", "period_end": pe, "filed": filed, "capex": np.linspace(100, 210, 12)}
+    )
+    g = capex_growth_at_filed(fund, "U")
+    assert len(g) == 8
+    assert (g.index == pd.DatetimeIndex(filed[4:])).all()
