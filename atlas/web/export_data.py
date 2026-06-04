@@ -99,6 +99,11 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
         series["fundamentals"] = fund
     (out_dir / "series.json").write_text(json.dumps(series))
 
+    from analysis.signals import build_signal_records
+
+    signals = build_signal_records(con)
+    (out_dir / "signals.json").write_text(json.dumps(signals, default=str))
+
     tickers = sorted({t for n in nodes for t in n["tickers"]})
     stages = ["equipment", "foundry", "chips", "cloud"]
     meta = {
