@@ -2,7 +2,11 @@ import numpy as np
 import pandas as pd
 
 from analysis.fundamentals_leadlag import cycle_control, yoy_growth
-from analysis.fundamentals_leadlag import bootstrap_slope_ci, capex_revenue_edge
+from analysis.fundamentals_leadlag import (
+    bootstrap_slope_ci,
+    capex_revenue_edge,
+    capex_revenue_edges,
+)
 
 
 def _q(vals, start="2015-03-31"):
@@ -48,3 +52,23 @@ def test_capex_revenue_edge_detects_lead_and_direction():
     assert out["slope"] > 0
     assert out["contradicts_thesis"] is False
     assert out["n_quarters"] > 0
+
+
+def test_capex_revenue_edges_handles_staggered_peer_fiscal_calendars():
+    periods = pd.date_range("2015-03-31", periods=20, freq="QE")
+    shifted = periods + pd.Timedelta(days=31)
+    base = np.linspace(100.0, 200.0, len(periods))
+    fundamentals = pd.concat([
+        pd.DataFrame({"ticker": "UP", "period_end": periods, "capex": base, "revenue": np.nan}),
+        pd.DataFrame({"ticker": "DOWN", "period_end": periods, "capex": np.nan, "revenue": np.roll(base, 2)}),
+        pd.DataFrame({"ticker": "PEER1", "period_end": periods, "capex": np.nan, "revenue": base * 1.1}),
+        pd.DataFrame({"ticker": "PEER2", "period_end": shifted, "capex": np.nan, "revenue": base * 0.9}),
+    ], ignore_index=True)
+    nodes = pd.DataFrame([
+        {"id": "up", "tickers": '["UP"]'},
+        {"id": "down", "tickers": '["DOWN"]'},
+    ])
+    edges = pd.DataFrame([{"from_id": "up", "to_id": "down"}])
+    out = capex_revenue_edges(fundamentals, nodes, edges, iters=50, seed=4)
+    assert not out.empty
+    assert out["n_quarters"].iloc[0] > 0

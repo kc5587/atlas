@@ -113,7 +113,7 @@ def capex_revenue_edges(fundamentals: pd.DataFrame, nodes: pd.DataFrame,
         peers = [g for t, g in rev_growth.items() if t != dt]
         if not peers:
             continue
-        cycle = pd.concat(peers, axis=1, join="inner").dropna().mean(axis=1)
+        cycle = pd.concat(peers, axis=1, join="outer", sort=True).mean(axis=1).dropna()
         out = capex_revenue_edge(cg, rg, cycle, lag_min=1, lag_max=4, iters=iters, seed=seed)
         out.update({"left": e.from_id, "right": e.to_id})
         rows.append(out)

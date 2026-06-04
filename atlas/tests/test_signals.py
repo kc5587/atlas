@@ -1,7 +1,6 @@
 import pandas as pd
 
-from analysis.signals import h0_record
-from analysis.signals import h1_record
+from analysis.signals import build_signal_records, h0_record, h1_record
 
 
 def _edges_frame():
@@ -58,3 +57,36 @@ def test_h1_record_verdict_and_chain():
     assert rec["stat"]["n"] == 2
     assert rec["chart"]["type"] == "capex_revenue_overlay"
     assert len(rec["detail_rows"]) == 2
+
+
+def test_h1_record_suggestive_when_ci_positive_but_fdr_not_passed():
+    rows = _h1_rows()
+    rows.loc[0, "q_value"] = 0.24
+    rec = h1_record(rows)
+    assert rec["verdict"] == "suggestive"
+
+
+def test_build_signal_records_appends_h1_when_table_exists():
+    class Result:
+        def __init__(self, df=None, row=None):
+            self._df = df
+            self._row = row
+
+        def df(self):
+            return self._df
+
+        def fetchone(self):
+            return self._row
+
+    class Con:
+        def execute(self, sql):
+            if "FROM leadlag" in sql:
+                return Result(df=_edges_frame())
+            if "information_schema.tables" in sql:
+                return Result(row=(1,))
+            if "fundamentals_leadlag" in sql:
+                return Result(df=_h1_rows())
+            raise AssertionError(sql)
+
+    records = build_signal_records(Con())
+    assert [r["id"] for r in records] == ["H0", "H1"]
