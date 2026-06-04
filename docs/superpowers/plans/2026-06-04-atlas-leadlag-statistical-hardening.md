@@ -552,9 +552,16 @@ def _fit_betas(y: pd.Series, X: pd.DataFrame) -> np.ndarray:
 
 
 def ols_residual(y: pd.Series, X: pd.DataFrame, *, train_index=None) -> pd.Series:
-    """Residual of y on [const, X]; betas fit on train_index (default: all)."""
-    fit_y = y.loc[train_index] if train_index is not None else y
-    fit_X = X.loc[train_index] if train_index is not None else X
+    """Residual of y on [const, X]; betas fit on train_index (default: all).
+
+    train_index is intersected with the dates available in y and X, so a
+    pair-overlap train window applied to a shorter constituent does not raise.
+    """
+    if train_index is not None:
+        fit_idx = y.index.intersection(X.index).intersection(train_index)
+        fit_y, fit_X = y.loc[fit_idx], X.loc[fit_idx]
+    else:
+        fit_y, fit_X = y, X
     beta = _fit_betas(fit_y, fit_X)
     full = pd.concat([y.rename("y"), X], axis=1, join="inner").dropna()
     pred = _design(full.drop(columns="y")) @ beta
@@ -867,7 +874,10 @@ def build_hardened_edges(returns, nodes, edges, *, iters, seed) -> list[dict]:
                 continue
             sec_l = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(e.from_id), ""))
             sec_r = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(e.to_id), ""))
-            train = ret[lt].index[: int(len(ret[lt]) * OOS_INIT_TRAIN_FRAC)]
+            # Train = first 50% of the PAIR's overlap (spec §3); valid for both
+            # series even when histories differ in length (e.g. nvidia -> dell).
+            pair_idx = ret[lt].index.intersection(ret[rt].index)
+            train = pair_idx[: int(len(pair_idx) * OOS_INIT_TRAIN_FRAC)]
             left = residual_for_spec(ret[lt], factors, sector=sec_l, spec=spec, train_index=train)
             right = residual_for_spec(ret[rt], factors, sector=sec_r, spec=spec, train_index=train)
             paired = pd.concat([left.rename("l"), right.rename("r")], axis=1, join="inner").dropna()
