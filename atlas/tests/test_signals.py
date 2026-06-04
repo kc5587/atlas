@@ -1,6 +1,6 @@
 import pandas as pd
 
-from analysis.signals import build_signal_records, h0_record, h1_record
+from analysis.signals import build_signal_records, h0_record, h1_record, h5_record
 
 
 def _edges_frame():
@@ -123,6 +123,8 @@ def test_build_signal_records_appends_h1_when_table_exists():
         def execute(self, sql):
             if "FROM leadlag" in sql:
                 return Result(df=_edges_frame())
+            if "table_name='capex_price'" in sql:
+                return Result(row=(0,))
             if "information_schema.tables" in sql:
                 return Result(row=(1,))
             if "fundamentals_leadlag" in sql:
@@ -131,3 +133,35 @@ def test_build_signal_records_appends_h1_when_table_exists():
 
     records = build_signal_records(Con())
     assert [r["id"] for r in records] == ["H0", "H1"]
+
+
+def _h5_rows(slope=0.6, q=0.05, contra=False):
+    return pd.DataFrame(
+        [
+            {
+                "left": "broadcom",
+                "right": "google",
+                "horizon": 63,
+                "corr": 0.5,
+                "slope": slope,
+                "slope_lo": 0.2,
+                "slope_hi": 1.0,
+                "p_selection": 0.02,
+                "q_value": q,
+                "contradicts_thesis": contra,
+                "n_obs": 25,
+            },
+        ]
+    )
+
+
+def test_h5_confirmed_means_not_priced_in():
+    rec = h5_record(_h5_rows(slope=0.6, q=0.05))
+    assert rec["id"] == "H5"
+    assert rec["verdict"] == "confirmed"
+    assert rec["chart"]["type"] == "capex_price"
+
+
+def test_h5_null_means_priced_in():
+    rec = h5_record(_h5_rows(slope=0.05, q=0.8))
+    assert rec["verdict"] == "null"

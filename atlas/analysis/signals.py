@@ -93,6 +93,62 @@ def h1_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h5_record(rows: pd.DataFrame) -> dict:
+    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
+    n = int(len(elig))
+    confirmed = elig[
+        (elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0) & (~elig["contradicts_thesis"])
+    ]
+    suggestive = elig[
+        (elig["q_value"] <= 0.25)
+        & (elig["slope"] > 0)
+        & (elig["slope_lo"] > 0)
+        & (~elig["contradicts_thesis"])
+    ]
+    contradicting = elig[elig["contradicts_thesis"]]
+    if len(confirmed):
+        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
+    elif len(suggestive):
+        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
+    elif len(contradicting):
+        verdict, best = "contradicts", contradicting.iloc[0]
+    elif len(elig):
+        verdict, best = "null", elig.iloc[0]
+    else:
+        verdict = "null"
+        best = rows.iloc[0] if len(rows) else pd.Series(dtype=float)
+    interp = {
+        "confirmed": "not yet priced in",
+        "suggestive": "weak under-pricing signal",
+        "null": "priced in",
+        "contradicts": "over-reaction / reversal",
+    }[verdict]
+    return {
+        "id": "H5", "title": "Is upstream capex priced into downstream equity?",
+        "horizon": "1-2 quarters forward",
+        "claim": "Upstream capex growth predicts downstream forward returns",
+        "mechanism": f"Under-reaction to a slow real signal -- verdict: {interp}",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "best edge corr", "metric": "corr", "value": _num(best.get("corr"))},
+            {"stage": "best edge slope", "metric": "slope", "value": _num(best.get("slope"))},
+            {"stage": "selected horizon (days)", "metric": "days",
+             "value": _num(best.get("horizon"), 0)},
+        ],
+        "stat": {"name": "slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
+        "caveats": [
+            f"~{int(elig['n_obs'].median()) if len(elig) else 0} filings/edge; overlapping forward windows",
+            "Confirmed means not-yet-priced-in; Null means priced in",
+            "Observational, point-in-time on filing date; no costs/turnover",
+        ],
+        "chart": {"type": "capex_price", "ref": "h5"},
+        "detail_rows": elig[["left", "right", "horizon", "corr", "slope", "slope_lo",
+                             "slope_hi", "q_value", "n_obs"]].to_dict("records"),
+    }
+
+
 def build_signal_records(con) -> list[dict]:  # pragma: no cover
     edges = con.execute(
         'SELECT "left","right",factor_model,corr_raw,corr_resid,corr_contemporaneous,'
@@ -105,4 +161,10 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h1 = con.execute('SELECT * FROM fundamentals_leadlag').df()
         if len(h1):
             records.append(h1_record(h1))
+    has_h5 = con.execute("SELECT count(*) FROM information_schema.tables "
+                         "WHERE table_name='capex_price'").fetchone()[0] > 0
+    if has_h5:
+        h5 = con.execute('SELECT * FROM capex_price').df()
+        if len(h5):
+            records.append(h5_record(h5))
     return records

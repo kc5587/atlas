@@ -13,6 +13,7 @@ from config import (
     FDR_ALPHA,
     FUND_MAX_LAG_QUARTERS,
     FUND_NMIN,
+    H5_FORWARD_HORIZONS,
     LAG_MAX,
     LAG_MIN,
     MACRO_NMIN,
@@ -479,6 +480,26 @@ def run() -> None:  # pragma: no cover
     con.execute("CREATE OR REPLACE TABLE fundamentals_leadlag AS SELECT * FROM h1t")
     con.unregister("h1t")
     print(f"fundamentals_leadlag: wrote {len(h1)} capex->revenue edge rows")
+    from analysis.capex_price import capex_price_edges
+    _ret = {
+        t: g.set_index("date")["log_return"].sort_index()
+        for t, g in returns.groupby("ticker")
+    }
+    _factors = {etf: _ret[etf] for etf in FACTOR_TICKERS.values() if etf in _ret}
+    h5 = capex_price_edges(
+        fundamentals,
+        returns,
+        _factors,
+        nodes,
+        edges,
+        horizons=H5_FORWARD_HORIZONS,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
+    )
+    con.register("h5t", h5)
+    con.execute("CREATE OR REPLACE TABLE capex_price AS SELECT * FROM h5t")
+    con.unregister("h5t")
+    print(f"capex_price: wrote {len(h5)} capex->price edge rows")
     con.close()
     print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
 
