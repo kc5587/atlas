@@ -30,6 +30,7 @@ export const MetaZ = z.object({
   tickers: z.array(z.string()), stages: z.array(z.string()),
 });
 
+export type SeriesPoint = z.infer<typeof SeriesPointZ>;
 export type Stage = z.infer<typeof StageZ>;
 export type Node = z.infer<typeof NodeZ>;
 export type Edge = z.infer<typeof EdgeZ>;

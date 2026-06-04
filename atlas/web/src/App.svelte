@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { loadAll } from "./lib/data";
+  import { nodesWithCapex } from "./lib/fundamentals";
   import { SCENES } from "./lib/scenes";
   import { activeScene, mode, selectedNode, dataset } from "./stores";
   import ValueChainMap from "./components/ValueChainMap.svelte";
@@ -32,6 +33,8 @@
       return new Set(
         data.graph.nodes.filter((n) => n.stage === scene.focusStage).map((n) => n.id),
       );
+    // "The upstream pull" scene: spotlight nodes that carry SEC capex data.
+    if (scene.showCapex && data) return nodesWithCapex(data.graph, data.series);
     return null;
   });
 
@@ -80,6 +83,7 @@
       <NodePanel
         graph={data.graph}
         series={data.series}
+        leadlag={data.leadlag}
         nodeId={$selectedNode}
         onClose={() => selectedNode.set(null)}
       />
