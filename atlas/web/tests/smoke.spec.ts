@@ -74,3 +74,10 @@ test("details panel opens in the current viewport after scrolling", async ({ pag
   expect(box!.y).toBeGreaterThanOrEqual(0);
   expect(box!.y).toBeLessThan(800);
 });
+
+test("Signal Lab opens and shows the H0 card", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("button.lab-entry").click();
+  await expect(page.getByRole("heading", { name: "Signal Lab" })).toBeVisible();
+  await expect(page.getByText(/Daily lead\/lag is sector beta/)).toBeVisible();
+});
