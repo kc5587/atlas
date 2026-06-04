@@ -397,7 +397,11 @@ def build_hardened_edges(returns, nodes, edges, *, iters, seed) -> list[dict]:
                 continue
             sec_l = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(e.from_id), ""))
             sec_r = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(e.to_id), ""))
-            train = ret[lt].index[: int(len(ret[lt]) * OOS_INIT_TRAIN_FRAC)]
+            # Train window = first 50% of the PAIR's overlap (spec §3), so the
+            # same train_index is valid for residualizing both series even when
+            # their histories differ in length/start (e.g. nvidia -> dell).
+            pair_idx = ret[lt].index.intersection(ret[rt].index)
+            train = pair_idx[: int(len(pair_idx) * OOS_INIT_TRAIN_FRAC)]
             left = residual_for_spec(ret[lt], factors, sector=sec_l, spec=spec, train_index=train)
             right = residual_for_spec(ret[rt], factors, sector=sec_r, spec=spec, train_index=train)
             paired = pd.concat([left.rename("l"), right.rename("r")], axis=1, join="inner").dropna()

@@ -21,9 +21,18 @@ def _fit_betas(y: pd.Series, X: pd.DataFrame) -> np.ndarray:
 
 
 def ols_residual(y: pd.Series, X: pd.DataFrame, *, train_index=None) -> pd.Series:
-    """Residual of y on [const, X]; betas fit on train_index (default: all)."""
-    fit_y = y.loc[train_index] if train_index is not None else y
-    fit_X = X.loc[train_index] if train_index is not None else X
+    """Residual of y on [const, X]; betas fit on train_index (default: all).
+
+    train_index is intersected with the dates actually available in y and X, so a
+    train window that extends beyond either series (e.g. a pair-overlap window
+    applied to a shorter constituent) does not raise — it simply fits on the
+    overlap.
+    """
+    if train_index is not None:
+        fit_idx = y.index.intersection(X.index).intersection(train_index)
+        fit_y, fit_X = y.loc[fit_idx], X.loc[fit_idx]
+    else:
+        fit_y, fit_X = y, X
     beta = _fit_betas(fit_y, fit_X)
     full = pd.concat([y.rename("y"), X], axis=1, join="inner").dropna()
     pred = _design(full.drop(columns="y")) @ beta
