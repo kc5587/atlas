@@ -169,3 +169,50 @@ def capex_price_edge(
         "contradicts_thesis": bool(slope < 0 or neg),
         "n_obs": int(sel["n_obs"]),
     }
+
+
+def capex_price_edges(
+    fundamentals: pd.DataFrame,
+    returns: pd.DataFrame,
+    factors: dict[str, pd.Series],
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    *,
+    horizons: tuple[int, ...],
+    iters: int,
+    seed: int,
+) -> pd.DataFrame:
+    """Estimate H5 over cross-edges, with FDR over finite-slope edges."""
+    import json as _json
+
+    from analysis.leadlag import bh_fdr
+    from config import FACTOR_TICKERS, STAGE_SECTOR
+
+    ret = {
+        t: g.set_index("date")["log_return"].sort_index()
+        for t, g in returns.groupby("ticker")
+    }
+    stage = {r.id: r.stage for r in nodes.itertuples()}
+
+    def ticker_of(node_id: str) -> str:
+        row = nodes.loc[nodes["id"] == node_id]
+        return _json.loads(row["tickers"].iloc[0])[0] if not row.empty else ""
+
+    rows = []
+    for e in edges.itertuples():
+        ut, dt = ticker_of(e.from_id), ticker_of(e.to_id)
+        cg = capex_growth_at_filed(fundamentals, ut)
+        if cg.empty or dt not in ret:
+            continue
+        sector = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(e.to_id), ""))
+        sec_d = sector if sector in factors else None
+        out = capex_price_edge(cg, ret[dt], factors, sector=sec_d, horizons=horizons, iters=iters, seed=seed)
+        out.update({"left": e.from_id, "right": e.to_id})
+        rows.append(out)
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        elig = df["slope"].notna()
+        df["q_value"] = np.nan
+        if elig.any():
+            df.loc[elig, "q_value"] = bh_fdr(df.loc[elig, "p_selection"].to_numpy())
+    return df

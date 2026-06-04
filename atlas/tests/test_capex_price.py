@@ -1,8 +1,15 @@
-from config import H5_FORWARD_HORIZONS
+import json
 
 import numpy as np
 import pandas as pd
-from analysis.capex_price import capex_growth_at_filed, capex_price_edge, forward_excess_return
+from analysis.capex_price import (
+    capex_growth_at_filed,
+    capex_price_edge,
+    capex_price_edges,
+    forward_excess_return,
+)
+
+from config import H5_FORWARD_HORIZONS
 
 
 def test_horizons_are_one_and_two_quarters():
@@ -85,3 +92,34 @@ def test_capex_price_edge_null_for_unrelated_returns():
     cg = capex_growth_at_filed(fund, "U")
     out = capex_price_edge(cg, daily, factors, sector="SOXX", horizons=(63, 126), iters=200, seed=3)
     assert out["p_selection"] > 0.1
+
+
+def test_capex_price_edges_fdr_over_eligible():
+    rng = np.random.default_rng(4)
+    pe = pd.date_range("2016-03-31", periods=28, freq="QE")
+    filed = pe + pd.Timedelta(days=40)
+    fund = pd.DataFrame(
+        {
+            "ticker": "U",
+            "period_end": pe,
+            "filed": filed,
+            "capex": np.exp(np.cumsum(0.05 + 0.1 * rng.standard_normal(28))),
+        }
+    )
+    ridx = pd.bdate_range("2015-06-01", periods=3000)
+    returns = pd.DataFrame(
+        {"ticker": "D", "date": ridx, "log_return": 0.0002 * rng.standard_normal(len(ridx))}
+    )
+    factors = {"SPY": pd.Series(0.0, index=ridx), "SOXX": pd.Series(0.0, index=ridx)}
+    nodes = pd.DataFrame(
+        [
+            {"id": "u", "tickers": json.dumps(["U"]), "stage": "chips"},
+            {"id": "d", "tickers": json.dumps(["D"]), "stage": "cloud"},
+        ]
+    )
+    edges = pd.DataFrame([{"from_id": "u", "to_id": "d"}])
+    out = capex_price_edges(
+        fund, returns, factors, nodes, edges, horizons=(63, 126), iters=100, seed=1
+    )
+    assert len(out) == 1
+    assert {"horizon", "slope", "q_value", "n_obs"}.issubset(out.columns)
