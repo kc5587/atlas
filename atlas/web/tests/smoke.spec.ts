@@ -12,3 +12,24 @@ test("map renders and explore unlocks", async ({ page }) => {
   await page.locator("g.node").first().click();
   await expect(page.locator("aside.panel")).toBeVisible();
 });
+
+test("story-mode node clicks open the details panel", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("g.node").first()).toBeVisible({ timeout: 10_000 });
+
+  await page.locator("g.node").first().click();
+
+  await expect(page.locator("aside.panel")).toBeVisible();
+});
+
+test("node click targets are forgiving around the circle", async ({ page }) => {
+  await page.goto("/");
+  const circle = page.locator("g.node circle").first();
+  await expect(circle).toBeVisible({ timeout: 10_000 });
+  const box = await circle.boundingBox();
+  expect(box).not.toBeNull();
+
+  await page.mouse.click(box!.x + box!.width + 10, box!.y + box!.height / 2);
+
+  await expect(page.locator("aside.panel")).toBeVisible();
+});

@@ -146,6 +146,11 @@
       .attr("r", (n) => 8 + 3 * Math.sqrt(n.criticality))
       .attr("fill", (n) => stageColor(n.stage))
       .attr("opacity", (n) => (dimNode(n.id) ? 0.12 : 1));
+    node.append("circle")
+      .attr("class", "hit-target")
+      .attr("r", 28)
+      .attr("fill", "transparent")
+      .attr("pointer-events", "all");
     // SR a11y: each node gets a <title> with name + stage + ticker.
     node.append("title")
       .text((n) => `${n.name} — ${n.stage}${n.tickers.length ? ` (${n.tickers.join(", ")})` : ""}`);
