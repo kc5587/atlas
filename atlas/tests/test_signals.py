@@ -1,6 +1,6 @@
 import pandas as pd
 
-from analysis.signals import build_signal_records, h0_record, h1_record, h5_record
+from analysis.signals import build_signal_records, h0_record, h1_record, h2_record, h5_record
 
 
 def _edges_frame():
@@ -125,6 +125,8 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(df=_edges_frame())
             if "table_name='capex_price'" in sql:
                 return Result(row=(0,))
+            if "table_name='event_drift'" in sql:
+                return Result(row=(0,))
             if "information_schema.tables" in sql:
                 return Result(row=(1,))
             if "fundamentals_leadlag" in sql:
@@ -186,3 +188,30 @@ def test_h5_significant_reversal_is_contradicts():
          "contradicts_thesis": True, "n_obs": 25},
     ])
     assert h5_record(rows)["verdict"] == "contradicts"
+
+
+def _h2_row(slope=0.01, q=0.05, neg=False):
+    return pd.DataFrame(
+        [
+            {
+                "horizon": 42,
+                "slope": slope,
+                "slope_lo": 0.004,
+                "slope_hi": 0.02,
+                "p_selection": 0.02,
+                "q_value": q,
+                "n_events": 120,
+                "pos_drift": 0.01,
+                "neg_drift": -0.008,
+                "contradicts_thesis": neg,
+            }
+        ]
+    )
+
+
+def test_h2_confirmed_when_significant_positive_drift():
+    assert h2_record(_h2_row(slope=0.01, q=0.05))["verdict"] == "confirmed"
+
+
+def test_h2_null_when_insignificant():
+    assert h2_record(_h2_row(slope=0.001, q=0.8))["verdict"] == "null"

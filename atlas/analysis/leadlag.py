@@ -13,6 +13,8 @@ from config import (
     FDR_ALPHA,
     FUND_MAX_LAG_QUARTERS,
     FUND_NMIN,
+    H2_DRIFT_HORIZONS,
+    H2_SURPRISE_K,
     H5_FORWARD_HORIZONS,
     LAG_MAX,
     LAG_MIN,
@@ -500,6 +502,24 @@ def run() -> None:  # pragma: no cover
     con.execute("CREATE OR REPLACE TABLE capex_price AS SELECT * FROM h5t")
     con.unregister("h5t")
     print(f"capex_price: wrote {len(h5)} capex->price edge rows")
+    from analysis.event_drift import event_drift
+    h2 = event_drift(
+        fundamentals,
+        returns,
+        _factors,
+        nodes,
+        edges,
+        horizons=H2_DRIFT_HORIZONS,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
+        k=H2_SURPRISE_K,
+    )
+    h2df = pd.DataFrame([h2])
+    h2df["q_value"] = h2df["p_selection"]
+    con.register("h2t", h2df)
+    con.execute("CREATE OR REPLACE TABLE event_drift AS SELECT * FROM h2t")
+    con.unregister("h2t")
+    print(f"event_drift: pooled slope={h2['slope']:.4f} n={h2['n_events']}")
     con.close()
     print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
 

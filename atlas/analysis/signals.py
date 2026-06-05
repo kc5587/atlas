@@ -93,6 +93,56 @@ def h1_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h2_record(rows: pd.DataFrame) -> dict:
+    elig = rows[rows["slope"].notna()]
+    n = int(elig["n_events"].iloc[0]) if len(elig) else 0
+    if not len(elig):
+        verdict, best = "null", pd.Series(dtype=float)
+    else:
+        best = elig.iloc[0]
+        q = float(best["q_value"])
+        slope = float(best["slope"])
+        lo = float(best["slope_lo"])
+        if q <= FDR_ALPHA and slope > 0:
+            verdict = "confirmed"
+        elif q <= FDR_ALPHA and slope < 0:
+            verdict = "contradicts"
+        elif q <= 0.25 and slope > 0 and lo > 0:
+            verdict = "suggestive"
+        else:
+            verdict = "null"
+    interp = {
+        "confirmed": "under-reaction (drift exists)",
+        "suggestive": "weak drift",
+        "null": "no drift (efficient)",
+        "contradicts": "over-reaction / reversal",
+    }[verdict]
+    return {
+        "id": "H2", "title": "Does a capex surprise drift into downstream returns?",
+        "horizon": "weeks (event study)",
+        "claim": "An upstream capex surprise predicts downstream forward drift",
+        "mechanism": f"Post-announcement under-reaction -- verdict: {interp}",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "drift | positive surprise", "metric": "ret",
+             "value": _num(best.get("pos_drift"))},
+            {"stage": "drift | negative surprise", "metric": "ret",
+             "value": _num(best.get("neg_drift"))},
+            {"stage": "pooled slope", "metric": "slope", "value": _num(best.get("slope"))},
+        ],
+        "stat": {"name": "pooled_slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
+        "caveats": [
+            f"horizon {int(best.get('horizon')) if len(elig) else 0}d; event-clustered (quarter-block bootstrap)",
+            "effective n << event count; observational; no costs",
+        ],
+        "chart": {"type": "event_drift", "ref": "h2"},
+        "detail_rows": elig[["horizon", "slope", "slope_lo", "slope_hi", "q_value",
+                             "n_events", "pos_drift", "neg_drift"]].to_dict("records"),
+    }
+
+
 def h5_record(rows: pd.DataFrame) -> dict:
     elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
     n = int(len(elig))
@@ -172,4 +222,10 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h5 = con.execute('SELECT * FROM capex_price').df()
         if len(h5):
             records.append(h5_record(h5))
+    has_h2 = con.execute("SELECT count(*) FROM information_schema.tables "
+                         "WHERE table_name='event_drift'").fetchone()[0] > 0
+    if has_h2:
+        h2 = con.execute('SELECT * FROM event_drift').df()
+        if len(h2):
+            records.append(h2_record(h2))
     return records
