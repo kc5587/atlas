@@ -36,4 +36,19 @@ describe("signals parsing", () => {
     expect(body).toContain("broadcom");
     expect(body).toContain("63d");
   });
+  it("renders the event drift row", () => {
+    const [signal] = parseSignals([{
+      ...valid[0],
+      id: "H2",
+      chart: { type: "event_drift", ref: "h2" },
+      detail_rows: [{
+        horizon: 42, slope: 0.012, pos_drift: 0.01,
+        neg_drift: -0.008, n_events: 120,
+      }],
+    }]);
+    const { body } = render(SignalCard, { props: { signal } });
+    expect(body).toContain("+surprise drift 0.010");
+    expect(body).toContain("-surprise -0.008");
+    expect(body).toContain("42d");
+  });
 });

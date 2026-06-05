@@ -45,6 +45,16 @@
       {/each}
     </ul>
   {/if}
+  {#if signal.chart.type === "event_drift"}
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>+surprise drift {Number(r.pos_drift).toFixed(3)}</span>
+          <span>-surprise {Number(r.neg_drift).toFixed(3)}</span>
+          <b>slope {Number(r.slope).toFixed(3)}</b>
+          <span class="lag">{r.horizon}d · n={r.n_events}</span></li>
+      {/each}
+    </ul>
+  {/if}
   {#each signal.caveats as c}<p class="caveat">⚠ {c}</p>{/each}
 </article>
 
