@@ -52,6 +52,7 @@ def pooled_events(
         return _json.loads(row["tickers"].iloc[0])[0] if not row.empty else ""
 
     rows = []
+    fwd_cache: dict[tuple[str, pd.Timestamp], float] = {}
     for e in edges.itertuples():
         upstream, downstream = ticker_of(e.from_id), ticker_of(e.to_id)
         surprise = capex_surprise(fundamentals, upstream, k=k)
@@ -62,9 +63,12 @@ def pooled_events(
         for filed, value in surprise.items():
             if not np.isfinite(value):
                 continue
-            fwd = forward_excess_return(
-                ret[downstream], factors, sector=sector, filed=filed, horizon_days=horizon
-            )
+            key = (downstream, pd.Timestamp(filed))
+            if key not in fwd_cache:
+                fwd_cache[key] = forward_excess_return(
+                    ret[downstream], factors, sector=sector, filed=filed, horizon_days=horizon
+                )
+            fwd = fwd_cache[key]
             if np.isfinite(fwd):
                 rows.append({"date": pd.Timestamp(filed), "surprise": float(value), "fwd": fwd})
     return (
