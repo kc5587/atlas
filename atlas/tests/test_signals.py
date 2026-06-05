@@ -165,3 +165,24 @@ def test_h5_confirmed_means_not_priced_in():
 def test_h5_null_means_priced_in():
     rec = h5_record(_h5_rows(slope=0.05, q=0.8))
     assert rec["verdict"] == "null"
+
+
+def test_h5_insignificant_negative_slope_is_null_not_contradicts():
+    # slope slightly negative, CI straddles 0, q=1.0 -> no effect -> priced in (null),
+    # NOT a 'contradicts'/reversal claim.
+    rows = pd.DataFrame([
+        {"left": "a", "right": "b", "horizon": 126, "corr": -0.1, "slope": -0.014,
+         "slope_lo": -0.049, "slope_hi": 0.02, "p_selection": 0.9, "q_value": 1.0,
+         "contradicts_thesis": True, "n_obs": 25},
+    ])
+    assert h5_record(rows)["verdict"] == "null"
+
+
+def test_h5_significant_reversal_is_contradicts():
+    # genuine reversal: negative slope, CI excludes 0, passes FDR
+    rows = pd.DataFrame([
+        {"left": "a", "right": "b", "horizon": 63, "corr": -0.5, "slope": -0.4,
+         "slope_lo": -0.6, "slope_hi": -0.2, "p_selection": 0.01, "q_value": 0.05,
+         "contradicts_thesis": True, "n_obs": 25},
+    ])
+    assert h5_record(rows)["verdict"] == "contradicts"

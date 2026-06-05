@@ -105,15 +105,20 @@ def h5_record(rows: pd.DataFrame) -> dict:
         & (elig["slope_lo"] > 0)
         & (~elig["contradicts_thesis"])
     ]
-    contradicting = elig[elig["contradicts_thesis"]]
+    # "Contradicts" must be a STATISTICALLY SIGNIFICANT reversal (negative slope
+    # passing FDR) — not a near-zero negative slope. Otherwise it is just noise =>
+    # priced in (null). A slope of -0.014 with q=1.0 is not a reversal claim.
+    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
     if len(confirmed):
         verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
     elif len(suggestive):
         verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
     elif len(contradicting):
-        verdict, best = "contradicts", contradicting.iloc[0]
+        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
     elif len(elig):
-        verdict, best = "null", elig.iloc[0]
+        # Null: surface the closest-to-significant edge so the card shows that even
+        # the strongest link does not pass ("priced in"), not an arbitrary edge.
+        verdict, best = "null", elig.sort_values("q_value").iloc[0]
     else:
         verdict = "null"
         best = rows.iloc[0] if len(rows) else pd.Series(dtype=float)
