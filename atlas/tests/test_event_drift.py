@@ -1,8 +1,10 @@
-from config import H2_DRIFT_HORIZONS, H2_SURPRISE_K
+import json
 
 import numpy as np
 import pandas as pd
-from analysis.event_drift import capex_surprise
+from analysis.event_drift import capex_surprise, pooled_events
+
+from config import H2_DRIFT_HORIZONS, H2_SURPRISE_K
 
 
 def test_h2_config():
@@ -27,3 +29,30 @@ def test_capex_surprise_is_standardized_and_filing_indexed():
     f2.loc[f2.index[-1], "capex"] *= 5
     after = capex_surprise(f2, "U", k=4)
     assert np.allclose(base.iloc[:-1].to_numpy(), after.iloc[:-1].to_numpy())
+
+
+def test_pooled_events_pools_across_edges_after_filing():
+    fund = pd.concat([_fund("U"), _fund("V")], ignore_index=True)
+    ridx = pd.bdate_range("2015-06-01", periods=3000)
+    rng = np.random.default_rng(1)
+    returns = pd.concat(
+        [
+            pd.DataFrame(
+                {"ticker": "D", "date": ridx, "log_return": 0.0002 * rng.standard_normal(len(ridx))}
+            ),
+        ],
+        ignore_index=True,
+    )
+    factors = {"SPY": pd.Series(0.0, index=ridx), "SOXX": pd.Series(0.0, index=ridx)}
+    nodes = pd.DataFrame(
+        [
+            {"id": "u", "tickers": json.dumps(["U"]), "stage": "chips"},
+            {"id": "v", "tickers": json.dumps(["V"]), "stage": "chips"},
+            {"id": "d", "tickers": json.dumps(["D"]), "stage": "cloud"},
+        ]
+    )
+    edges = pd.DataFrame([{"from_id": "u", "to_id": "d"}, {"from_id": "v", "to_id": "d"}])
+    ev = pooled_events(fund, returns, factors, nodes, edges, horizon=42, k=4)
+    assert {"date", "surprise", "fwd"}.issubset(ev.columns)
+    assert len(ev) > 20
+    assert ev["date"].is_monotonic_increasing
