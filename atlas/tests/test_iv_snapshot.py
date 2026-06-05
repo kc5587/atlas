@@ -65,3 +65,19 @@ def test_merge_panel_dedupes_on_ticker_date():
     assert len(out) == 2
     nvda = out[(out.ticker == "NVDA") & (out.date == pd.Timestamp("2026-06-04"))]
     assert float(nvda["atm_iv_30d"].iloc[0]) == 0.99
+
+
+def test_load_prior_panel_missing_file_then_merge(tmp_path):
+    # First-ever run: no panel file exists. The empty prior must not crash pandera
+    # validation, and merging today's rows onto it must succeed.
+    from ingest.iv_snapshot import _load_prior_panel, merge_panel
+
+    prior = _load_prior_panel(tmp_path / "panel.parquet")
+    assert list(prior.columns) == ["ticker", "date", "atm_iv_30d", "skew_25d",
+                                   "term_slope", "put_call_oi"]
+    assert len(prior) == 0
+    today = pd.DataFrame([{"ticker": "NVDA", "date": pd.Timestamp("2026-06-06"),
+                           "atm_iv_30d": 0.45, "skew_25d": 0.05, "term_slope": 0.02,
+                           "put_call_oi": 1.1}])
+    merged = merge_panel(prior, today)
+    assert len(merged) == 1

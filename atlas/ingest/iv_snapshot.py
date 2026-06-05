@@ -74,20 +74,29 @@ def snapshot_one(ticker: str, *, asof: pd.Timestamp) -> dict | None:  # pragma: 
     }
 
 
+def _empty_panel() -> pd.DataFrame:
+    """Schema-shaped, zero-row panel. Not schema-validated: pandera rejects an empty
+    object 'ticker' column, and the populated merge result is validated downstream."""
+    return pd.DataFrame(
+        {
+            # match the schema's string dtype so concat with populated rows preserves it
+            # (an object 'ticker' would downgrade the merged column and fail validation)
+            "ticker": pd.Series([], dtype="str"),
+            "date": pd.Series([], dtype="datetime64[ns]"),
+            "atm_iv_30d": pd.Series([], dtype="float64"),
+            "skew_25d": pd.Series([], dtype="float64"),
+            "term_slope": pd.Series([], dtype="float64"),
+            "put_call_oi": pd.Series([], dtype="float64"),
+        }
+    )
+
+
 def _load_prior_panel(path: Path) -> pd.DataFrame:  # pragma: no cover
     if path.exists():
-        return IV_SNAPSHOT_SCHEMA.validate(pd.read_parquet(path))
-    return IV_SNAPSHOT_SCHEMA.validate(
-        pd.DataFrame(
-            {
-                col: pd.Series(
-                    [],
-                    dtype="datetime64[ns]" if col == "date" else ("object" if col == "ticker" else "float64"),
-                )
-                for col in IV_SNAPSHOT_SCHEMA.columns
-            }
-        )
-    )
+        df = pd.read_parquet(path)
+        if len(df):
+            return IV_SNAPSHOT_SCHEMA.validate(df)
+    return _empty_panel()
 
 
 def run() -> None:  # pragma: no cover
