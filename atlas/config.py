@@ -57,6 +57,10 @@ FUND_NMIN = 12
 # H5 capex priced-in test: forward-return windows in trading days (~1Q, ~2Q).
 H5_FORWARD_HORIZONS: tuple[int, ...] = (63, 126)
 
+# H2 event-drift: forward drift horizons (trading days) and surprise lookback (quarters).
+H2_DRIFT_HORIZONS: tuple[int, ...] = (21, 42, 63)
+H2_SURPRISE_K = 4
+
 # Priority 1 hardening: factor model + OOS params.
 FACTOR_TICKERS: dict[str, str] = {"market": "SPY", "semis": "SOXX", "cloud": "IGV"}
 STAGE_SECTOR: dict[str, str] = {
