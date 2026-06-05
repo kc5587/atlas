@@ -51,8 +51,6 @@ def selection_pvalue_one_series(x: np.ndarray, y: np.ndarray, *, iters: int, see
     obs, _ = _corr_slope(x, y)
     if not np.isfinite(obs):
         return 1.0
-    if obs < 0.10:
-        return 0.50
     block = auto_block_length(x)
     rng = np.random.default_rng(seed)
     count = 0
@@ -173,5 +171,4 @@ def vol_termstructure_table(
         df["q_value"] = np.nan
         if elig.any():
             df.loc[elig, "q_value"] = bh_fdr(df.loc[elig, "p_selection"].to_numpy())
-        df.loc[~elig, "q_value"] = 1.0
     return df

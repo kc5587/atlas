@@ -38,13 +38,21 @@ def test_selection_pvalue_small_when_signal_strong():
 
 
 def test_selection_pvalue_large_when_no_signal():
+    # Under a true null (x independent of y) the one-sided p must be well-calibrated
+    # across many independent draws (~Uniform), not a fabricated constant and not
+    # systematically tiny. A single-draw assertion would itself be tautological.
     from analysis.vol_termstructure import selection_pvalue_one_series
 
-    rng = np.random.default_rng(12)
-    x = rng.normal(1.0, 0.1, 500)
-    y = rng.normal(0, 0.02, 500)
-    p = selection_pvalue_one_series(x, y, iters=300, seed=1)
-    assert p > 0.10
+    pvals = []
+    for s in range(24):
+        rng = np.random.default_rng(1000 + s)
+        x = rng.normal(1.0, 0.1, 600)
+        y = rng.normal(0.0, 0.02, 600)
+        pvals.append(selection_pvalue_one_series(x, y, iters=300, seed=s))
+    pvals = np.array(pvals)
+    assert pvals.std() > 0.05            # genuine variation, not a constant
+    assert (pvals < 0.05).mean() <= 0.25  # rejection rate near alpha, not inflated
+    assert pvals.mean() > 0.30            # centered well above zero
 
 
 def test_oos_sign_rate_high_for_stable_positive():
@@ -122,3 +130,38 @@ def test_vol_termstructure_table_family_and_fdr_columns():
     ):
         assert col in out.columns
     assert out["q_value"].notna().all()
+
+
+def test_selection_pvalue_runs_null_even_when_obs_corr_below_point_one():
+    # Regression: a fabricated short-circuit (obs<0.10 -> p=0.50) bypassed the
+    # resampling null and contaminated the FDR family. A weak-but-real signal whose
+    # observed corr is < 0.10 must still get a genuine (small) p from the null.
+    from analysis.vol_termstructure import selection_pvalue_one_series
+
+    rng = np.random.default_rng(101)
+    n, rho = 6000, 0.07
+    x = rng.normal(0.0, 1.0, n)
+    y = rho * x + np.sqrt(1 - rho**2) * rng.normal(0.0, 1.0, n)
+    obs = float(np.corrcoef(x, y)[0, 1])
+    assert 0.0 < obs < 0.10  # precondition: lands in the old buggy regime
+    p = selection_pvalue_one_series(x, y, iters=500, seed=3)
+    assert p != 0.5  # not the fabricated constant
+    assert p < 0.05  # genuine null: a ~5-sigma signal is significant
+
+
+def test_degenerate_cell_qvalue_is_nan_not_one():
+    # Degenerate (non-eligible) cells must keep q_value NaN, mirroring capex_price/H5,
+    # so they cannot perturb the BH-FDR of genuinely-tested cells.
+    from analysis.vol_termstructure import vol_termstructure_table
+
+    vol = _vol_df({"^VIX": 20.0, "^VIX3M": 21.0})
+    returns = _ret_df(["SPY"])
+    out = vol_termstructure_table(
+        vol, returns, predictor=("^VIX", "^VIX3M"),
+        targets=("SPY",), horizons=(21, 100000), iters=200, seed=7,
+    )
+    deg = out[out["horizon"] == 100000]
+    elig = out[out["horizon"] == 21]
+    assert deg["slope"].isna().all()
+    assert deg["q_value"].isna().all()
+    assert elig["q_value"].notna().all()

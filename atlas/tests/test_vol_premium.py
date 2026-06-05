@@ -40,6 +40,7 @@ def test_incremental_oos_r2_positive_when_iv_carries_signal():
         iv=iv,
         fwd_rv=fwd_rv,
         lag_rv=lag_rv,
+        horizon=21,
         test_days=252,
         step_days=252,
         init_train_frac=0.5,
@@ -91,3 +92,23 @@ def test_vol_premium_table_shape_and_positive_vrp():
     for col in ("mean_vrp", "vrp_lo", "vrp_hi", "incremental_oos_r2", "n_obs"):
         assert col in out.columns
     assert (out["mean_vrp"] > 0).all()
+
+
+def test_incremental_oos_r2_not_positive_for_unrelated_iv():
+    # Embargo regression: with IV independent of forward RV, adding IV must NOT improve
+    # OOS forecast. A missing embargo leaks the overlapping forward window and can
+    # manufacture a spurious positive incremental R2.
+    from analysis.vol_premium import incremental_oos_r2
+
+    rng = np.random.default_rng(202)
+    n = 1600
+    idx = pd.bdate_range("2010-01-01", periods=n)
+    base = np.abs(rng.normal(0.04, 0.01, n))
+    fwd_rv = pd.Series(pd.Series(base).rolling(21, min_periods=1).mean().to_numpy(), index=idx)
+    lag_rv = fwd_rv.shift(21)
+    iv = pd.Series(rng.normal(20, 5, n), index=idx)  # independent of fwd_rv
+    r2 = incremental_oos_r2(
+        iv=iv, fwd_rv=fwd_rv, lag_rv=lag_rv, horizon=21,
+        test_days=252, step_days=252, init_train_frac=0.5,
+    )
+    assert r2 <= 0.02

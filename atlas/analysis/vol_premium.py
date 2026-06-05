@@ -80,11 +80,16 @@ def incremental_oos_r2(
     iv: pd.Series,
     fwd_rv: pd.Series,
     lag_rv: pd.Series,
+    horizon: int,
     test_days: int,
     step_days: int,
     init_train_frac: float,
 ) -> float:
-    """OOS R2 improvement of (IV + lagged RV) vs lagged RV at forecasting fwd RV."""
+    """OOS R2 improvement of (IV + lagged RV) vs lagged RV at forecasting fwd RV.
+
+    The forward target spans (t, t+horizon], so train/test folds are embargoed by
+    `horizon` to stop the overlapping window leaking across the boundary.
+    """
     df = pd.concat([iv.rename("iv"), fwd_rv.rename("y"), lag_rv.rename("lag")], axis=1)
     df = df.dropna()
     if len(df) < 4 * test_days:
@@ -94,7 +99,7 @@ def incremental_oos_r2(
         test_days=test_days,
         step_days=step_days,
         init_train_frac=init_train_frac,
-        embargo=0,
+        embargo=horizon,
     )
     sse_full, sse_base = 0.0, 0.0
     for tr_idx, te_idx in folds:
@@ -154,6 +159,7 @@ def vol_premium_table(
             iv=aligned_iv,
             fwd_rv=fwd_rv,
             lag_rv=fwd_rv.shift(horizon),
+            horizon=horizon,
             test_days=252,
             step_days=252,
             init_train_frac=0.5,
