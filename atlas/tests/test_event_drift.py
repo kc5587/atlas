@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 import pandas as pd
-from analysis.event_drift import capex_surprise, pooled_events
+from analysis.event_drift import capex_surprise, event_drift, pooled_events
 
 from config import H2_DRIFT_HORIZONS, H2_SURPRISE_K
 
@@ -56,3 +56,50 @@ def test_pooled_events_pools_across_edges_after_filing():
     assert {"date", "surprise", "fwd"}.issubset(ev.columns)
     assert len(ev) > 20
     assert ev["date"].is_monotonic_increasing
+
+
+def _nodes_edges():
+    nodes = pd.DataFrame(
+        [
+            {"id": "u", "tickers": json.dumps(["U"]), "stage": "chips"},
+            {"id": "d", "tickers": json.dumps(["D"]), "stage": "cloud"},
+        ]
+    )
+    edges = pd.DataFrame([{"from_id": "u", "to_id": "d"}])
+    return nodes, edges
+
+
+def test_event_drift_detects_positive_under_reaction():
+    fund = _fund("U", n=28)
+    surprises = capex_surprise(fund, "U", k=4)
+    ridx = pd.bdate_range("2015-06-01", periods=3200)
+    daily = pd.Series(0.0, index=ridx)
+    for filed, value in surprises.items():
+        win = daily.index[daily.index > filed][:42]
+        daily.loc[win] += 0.0006 * value
+    rng = np.random.default_rng(3)
+    daily += 0.0001 * pd.Series(rng.standard_normal(len(ridx)), index=ridx)
+    returns = pd.DataFrame({"ticker": "D", "date": ridx, "log_return": daily.to_numpy()})
+    factors = {"SPY": pd.Series(0.0, index=ridx), "SOXX": pd.Series(0.0, index=ridx)}
+    nodes, edges = _nodes_edges()
+    out = event_drift(
+        fund, returns, factors, nodes, edges, horizons=(21, 42, 63), iters=200, seed=1
+    )
+    assert out["slope"] > 0
+    assert out["n_events"] > 10
+    assert out["pos_drift"] > out["neg_drift"]
+
+
+def test_event_drift_null_for_noise():
+    fund = _fund("U", n=28)
+    ridx = pd.bdate_range("2015-06-01", periods=3200)
+    rng = np.random.default_rng(5)
+    returns = pd.DataFrame(
+        {"ticker": "D", "date": ridx, "log_return": 0.0002 * rng.standard_normal(len(ridx))}
+    )
+    factors = {"SPY": pd.Series(0.0, index=ridx), "SOXX": pd.Series(0.0, index=ridx)}
+    nodes, edges = _nodes_edges()
+    out = event_drift(
+        fund, returns, factors, nodes, edges, horizons=(21, 42, 63), iters=200, seed=2
+    )
+    assert out["p_selection"] > 0.1
