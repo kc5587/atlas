@@ -10,7 +10,7 @@ from pathlib import Path
 
 import duckdb
 
-from config import DUCKDB_PATH
+from config import DATA_RAW, DUCKDB_PATH
 
 SCHEMA_VERSION = "1"
 KEEP_RELEASES = 14
@@ -24,6 +24,7 @@ ROW_COUNT_TABLES = [
     "leadlag",
     "stg_fundamentals",
     "fundamentals_quarterly",
+    "iv_snapshots",
 ]
 
 
@@ -75,10 +76,14 @@ def main() -> None:
         "row_counts": _row_counts(db),
     }
     Path("manifest.json").write_text(json.dumps(manifest, indent=2))
+    panel = Path(DATA_RAW) / "iv_snapshots" / "panel.parquet"
+    assets = [str(db), "manifest.json"]
+    if panel.exists():
+        assets.append(str(panel))
 
     # 1) create as DRAFT, 2) upload all assets to the draft
     subprocess.run(
-        ["gh", "release", "create", tag, str(db), "manifest.json",
+        ["gh", "release", "create", tag, *assets,
          "--draft", "--title", tag, "--notes", "automated data release"],
         check=True,
     )

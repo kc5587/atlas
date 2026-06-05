@@ -33,3 +33,19 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [cik, metric, period_end, accn]
+  - name: stg_vol
+    description: "Raw implied-vol index history (VIX complex + VXN), long format."
+    columns:
+      - name: series
+        tests: [not_null]
+      - name: date
+        tests: [not_null]
+      - name: close
+        tests: [not_null]
+  - name: stg_iv_snapshots
+    description: "Accumulating single-name option-chain snapshot panel."
+    columns:
+      - name: ticker
+        tests: [not_null]
+      - name: date
+        tests: [not_null]

@@ -18,6 +18,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v8.2.0
       - run: uv venv && uv pip install -e ".[dev]"
+      - name: Restore prior IV panel (best-effort)
+        run: |
+          mkdir -p data/raw/iv_snapshots
+          TAG=$(gh release list --json tagName,createdAt \
+            --jq 'map(select(.tagName|startswith("data-")))|sort_by(.createdAt)|last|.tagName' || true)
+          if [ -n "$TAG" ]; then gh release download "$TAG" --pattern panel.parquet \
+            --dir data/raw/iv_snapshots || echo "no prior panel yet"; fi
       - run: uv run make all
       - run: uv run python scripts/publish_release.py
 

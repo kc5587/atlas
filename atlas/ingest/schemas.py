@@ -25,6 +25,27 @@ MACRO_SCHEMA = pa.DataFrameSchema(
     strict=True,
 )
 
+VOL_SCHEMA = pa.DataFrameSchema(
+    {
+        "series": pa.Column(str, nullable=False),
+        "date": pa.Column("datetime64[ns]", nullable=False),
+        "close": pa.Column(float, pa.Check.ge(0), nullable=False),
+    },
+    strict=True,
+)
+
+IV_SNAPSHOT_SCHEMA = pa.DataFrameSchema(
+    {
+        "ticker": pa.Column(str, nullable=False),
+        "date": pa.Column("datetime64[ns]", nullable=False),
+        "atm_iv_30d": pa.Column(float, pa.Check.ge(0), nullable=True),
+        "skew_25d": pa.Column(float, nullable=True),
+        "term_slope": pa.Column(float, nullable=True),
+        "put_call_oi": pa.Column(float, pa.Check.ge(0), nullable=True),
+    },
+    strict=True,
+)
+
 FUNDAMENTAL_SCHEMA = pa.DataFrameSchema(
     {
         "cik": pa.Column(str, nullable=False),

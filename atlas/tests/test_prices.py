@@ -1,4 +1,5 @@
 import pandas as pd
+import inspect
 
 from ingest.prices import normalize_prices
 
@@ -34,3 +35,11 @@ def test_normalize_prices_drops_all_nan_rows():
     raw.loc[raw.index[1], ["Open", "High", "Low", "Close", "Adj Close", "Volume"]] = None
     out = normalize_prices(raw, "NVDA")
     assert len(out) == 1
+
+
+def test_run_default_ticker_list_includes_aux_tickers():
+    import ingest.prices as p
+    from config import AUX_TICKERS
+
+    assert "QQQ" in AUX_TICKERS
+    assert "AUX_TICKERS" in inspect.getsource(p.run)

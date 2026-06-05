@@ -143,6 +143,117 @@ def h2_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h6_record(rows: pd.DataFrame) -> dict:
+    """H6: variance risk premium + implied-vol information content."""
+    elig = rows[rows["mean_vrp"].notna()]
+    if not len(elig):
+        verdict, best, n = "null", pd.Series(dtype=float), 0
+    else:
+        best = elig.sort_values("mean_vrp", ascending=False).iloc[0]
+        n = int(best["n_obs"])
+        premium = best["mean_vrp"] > 0 and best["vrp_lo"] > 0
+        info = best["incremental_oos_r2"] > 0
+        neg_premium = best["mean_vrp"] < 0 and best["vrp_hi"] < 0
+        if premium and info:
+            verdict = "confirmed"
+        elif premium or info:
+            verdict = "suggestive"
+        elif neg_premium:
+            verdict = "contradicts"
+        else:
+            verdict = "null"
+    interp = {
+        "confirmed": "options price risk informatively (premium + forecast content)",
+        "suggestive": "partial: premium or forecast content, not both",
+        "null": "no measurable premium / no added forecast content",
+        "contradicts": "implied below realized (negative premium)",
+    }[verdict]
+    return {
+        "id": "H6",
+        "title": "Implied vol carries information: the variance risk premium",
+        "horizon": "1 month (21d realized)",
+        "claim": "Implied variance exceeds subsequent realized variance, and IV forecasts RV",
+        "mechanism": f"Options market charges a variance risk premium -- verdict: {interp}",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "mean variance risk premium", "metric": "var",
+             "value": _num(best.get("mean_vrp"))},
+            {"stage": "VRP 90% CI low", "metric": "var", "value": _num(best.get("vrp_lo"))},
+            {"stage": "IV incremental OOS R2", "metric": "r2",
+             "value": _num(best.get("incremental_oos_r2"))},
+        ],
+        "stat": {"name": "mean_vrp", "value": _num(best.get("mean_vrp")),
+                 "ci": [_num(best.get("vrp_lo")), _num(best.get("vrp_hi"))],
+                 "q_value": None, "n": n},
+        "caveats": [
+            "Index/sector level: VIX<->SPY, VXN<->QQQ. No free semis implied series exists.",
+            "Overlapping 21d windows -> block-bootstrap CI; observational, no costs.",
+        ],
+        "chart": {"type": "vrp_term", "ref": "h6"},
+        "detail_rows": elig[["pair", "mean_vrp", "vrp_lo", "vrp_hi",
+                             "incremental_oos_r2", "n_obs"]].to_dict("records"),
+    }
+
+
+def h7_record(rows: pd.DataFrame) -> dict:
+    """H7: vol term-structure slope as a forward-return timer."""
+    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
+    confirmed = elig[
+        (elig["q_value"] <= FDR_ALPHA)
+        & (elig["slope"] > 0)
+        & (~elig["contradicts_thesis"])
+        & (elig["oos_sign_rate"] >= OOS_SIGN_FLOOR)
+    ]
+    suggestive = elig[
+        (elig["q_value"] <= 0.25)
+        & (elig["slope"] > 0)
+        & (elig["slope_lo"] > 0)
+        & (~elig["contradicts_thesis"])
+    ]
+    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
+    if len(confirmed):
+        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
+    elif len(suggestive):
+        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
+    elif len(contradicting):
+        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
+    elif len(elig):
+        verdict, best = "null", elig.sort_values("q_value").iloc[0]
+    else:
+        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    interp = {
+        "confirmed": "harvestable timing edge (not priced in)",
+        "suggestive": "weak timing signal",
+        "null": "priced in / no reliable timing",
+        "contradicts": "term structure times returns the wrong way",
+    }[verdict]
+    n = int(best.get("n_obs")) if len(elig) else 0
+    return {
+        "id": "H7",
+        "title": "Does the vol term-structure slope time forward sector returns?",
+        "horizon": "1-3 months",
+        "claim": "VIX/VIX3M backwardation predicts positive forward sector returns",
+        "mechanism": f"Risk-appetite mean reversion -- verdict: {interp}",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "best-cell corr", "metric": "corr", "value": _num(best.get("corr"))},
+            {"stage": "best-cell slope", "metric": "slope", "value": _num(best.get("slope"))},
+            {"stage": "OOS sign-retention", "metric": "rate",
+             "value": _num(best.get("oos_sign_rate"))},
+        ],
+        "stat": {"name": "slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
+        "caveats": [
+            "Predictor is S&P term structure (VXN has no free term structure); targets raw forward returns.",
+            "9-cell family (3 targets x 3 horizons), BH-FDR corrected; observational, no costs.",
+        ],
+        "chart": {"type": "termstructure_timing", "ref": "h7"},
+        "detail_rows": elig[["target", "horizon", "corr", "slope", "slope_lo", "slope_hi",
+                             "q_value", "oos_sign_rate", "n_obs"]].to_dict("records"),
+    }
+
+
 def h5_record(rows: pd.DataFrame) -> dict:
     elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
     n = int(len(elig))
@@ -228,4 +339,16 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h2 = con.execute('SELECT * FROM event_drift').df()
         if len(h2):
             records.append(h2_record(h2))
+    has_h6 = con.execute("SELECT count(*) FROM information_schema.tables "
+                         "WHERE table_name='vol_premium'").fetchone()[0] > 0
+    if has_h6:
+        h6 = con.execute('SELECT * FROM vol_premium').df()
+        if len(h6):
+            records.append(h6_record(h6))
+    has_h7 = con.execute("SELECT count(*) FROM information_schema.tables "
+                         "WHERE table_name='vol_termstructure'").fetchone()[0] > 0
+    if has_h7:
+        h7 = con.execute('SELECT * FROM vol_termstructure').df()
+        if len(h7):
+            records.append(h7_record(h7))
     return records

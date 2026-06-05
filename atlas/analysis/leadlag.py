@@ -520,6 +520,41 @@ def run() -> None:  # pragma: no cover
     con.execute("CREATE OR REPLACE TABLE event_drift AS SELECT * FROM h2t")
     con.unregister("h2t")
     print(f"event_drift: pooled slope={h2['slope']:.4f} n={h2['n_events']}")
+    try:
+        vol = con.execute("SELECT series, date, close FROM vol_indices").fetchdf()
+    except duckdb.CatalogException:
+        vol = pd.DataFrame(columns=["series", "date", "close"])
+    if len(vol):
+        from analysis.vol_premium import vol_premium_table
+        from analysis.vol_termstructure import vol_termstructure_table
+        from config import H6_PAIRS, H6_RV_HORIZON, H7_HORIZONS, H7_PREDICTOR, H7_TARGETS
+
+        h6 = vol_premium_table(
+            vol,
+            returns,
+            pairs=H6_PAIRS,
+            horizon=H6_RV_HORIZON,
+            iters=BOOTSTRAP_ITERS,
+            seed=RANDOM_SEED,
+        )
+        con.register("h6t", h6)
+        con.execute("CREATE OR REPLACE TABLE vol_premium AS SELECT * FROM h6t")
+        con.unregister("h6t")
+        print(f"vol_premium: wrote {len(h6)} VRP pair rows")
+
+        h7 = vol_termstructure_table(
+            vol,
+            returns,
+            predictor=H7_PREDICTOR,
+            targets=H7_TARGETS,
+            horizons=H7_HORIZONS,
+            iters=BOOTSTRAP_ITERS,
+            seed=RANDOM_SEED,
+        )
+        con.register("h7t", h7)
+        con.execute("CREATE OR REPLACE TABLE vol_termstructure AS SELECT * FROM h7t")
+        con.unregister("h7t")
+        print(f"vol_termstructure: wrote {len(h7)} target x horizon rows")
     con.close()
     print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
 

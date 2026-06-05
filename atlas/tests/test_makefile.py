@@ -17,3 +17,13 @@ def test_make_build_uses_absolute_dbt_paths():
     assert 'ATLAS_DATA_RAW="$(CURDIR)/data/raw"' in build_body
     assert 'ATLAS_DUCKDB_PATH="$(CURDIR)/data/atlas.duckdb"' in build_body
     assert "dbt build --profiles-dir ." in build_body
+
+
+def test_ingest_target_runs_vol():
+    mk = (Path(__file__).resolve().parents[1] / "Makefile").read_text()
+    assert "ingest.vol" in mk
+
+
+def test_ingest_target_runs_iv_snapshot():
+    mk = (Path(__file__).resolve().parents[1] / "Makefile").read_text()
+    assert "ingest.iv_snapshot" in mk

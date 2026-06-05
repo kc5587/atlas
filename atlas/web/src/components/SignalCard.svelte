@@ -55,6 +55,28 @@
       {/each}
     </ul>
   {/if}
+  {#if signal.chart.type === "vrp_term"}
+    <p class="legend">Variance risk premium = implied² − realized² (annualized)</p>
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.pair}</span>
+          <b>VRP {Number(r.mean_vrp).toFixed(4)}</b>
+          <span class="ci">[{Number(r.vrp_lo).toFixed(4)}, {Number(r.vrp_hi).toFixed(4)}]</span>
+          <span class="lag">ΔR² {Number(r.incremental_oos_r2).toFixed(3)} · n={r.n_obs}</span></li>
+      {/each}
+    </ul>
+  {/if}
+  {#if signal.chart.type === "termstructure_timing"}
+    <p class="legend">Slope of forward return on VIX/VIX3M (one-sided, FDR-corrected)</p>
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.target} · {r.horizon}d</span>
+          <b>slope {Number(r.slope).toFixed(2)}</b>
+          <span class="ci">[{Number(r.slope_lo).toFixed(2)}, {Number(r.slope_hi).toFixed(2)}]</span>
+          <span class="lag">q={Number(r.q_value).toFixed(2)} · sign {Number(r.oos_sign_rate).toFixed(2)}</span></li>
+      {/each}
+    </ul>
+  {/if}
   {#each signal.caveats as c}<p class="caveat">⚠ {c}</p>{/each}
 </article>
 

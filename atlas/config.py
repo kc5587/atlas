@@ -76,3 +76,19 @@ OOS_EMBARGO_DAYS = MAX_LAG_DAYS
 OOS_MIN_FOLDS = 3
 OOS_SIGN_RATE_FLOOR = 0.6        # descriptive heuristic, NOT a significance test
 LEAVE_ONE_OUT_WEIGHT = 0.10      # ETF-weight threshold for leave-one-out variant
+
+# Track 1: options-implied vol. QQQ is VXN's matched underlying (not a chain node).
+AUX_TICKERS: list[str] = ["QQQ"]
+
+# Implied-vol index history (yfinance ^-prefixed), with FRED fallbacks where they exist.
+VOL_SERIES: tuple[str, ...] = ("^VIX9D", "^VIX", "^VIX3M", "^VIX6M", "^VXN")
+VOL_FRED_FALLBACK: dict[str, str] = {"^VIX": "VIXCLS", "^VXN": "VXNCLS"}
+
+# H6 variance risk premium: forward realized-vol window plus implied/underlying pairs.
+H6_RV_HORIZON = 21
+H6_PAIRS: tuple[tuple[str, str], ...] = (("^VIX", "SPY"), ("^VXN", "QQQ"))
+
+# H7 term-structure timing: predictor = VIX/VIX3M ratio; targets x forward horizons.
+H7_PREDICTOR: tuple[str, str] = ("^VIX", "^VIX3M")
+H7_TARGETS: tuple[str, ...] = ("SPY", "SOXX", "IGV")
+H7_HORIZONS: tuple[int, ...] = (21, 42, 63)

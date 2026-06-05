@@ -25,3 +25,17 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [ticker, period_end]
+  - name: vol_indices
+    description: "Implied-vol index levels used by H6/H7."
+    columns:
+      - name: series
+        tests: [not_null]
+      - name: date
+        tests: [not_null]
+  - name: iv_snapshots
+    description: "Accumulating single-name IV snapshot panel."
+    columns:
+      - name: ticker
+        tests: [not_null]
+      - name: date
+        tests: [not_null]

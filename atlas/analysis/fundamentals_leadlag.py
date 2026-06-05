@@ -11,7 +11,7 @@ import json as _json
 import numpy as np
 import pandas as pd
 
-from analysis.significance import _corr_at_lag, _signed_peak, selection_aware
+from analysis.significance import _signed_peak, selection_aware
 
 
 def yoy_growth(level: pd.Series) -> pd.Series:
@@ -39,7 +39,8 @@ def cycle_control(target_growth: pd.Series, cycle_growth: pd.Series) -> pd.Serie
 def bootstrap_slope_ci(x: np.ndarray, y: np.ndarray, *, block: int, iters: int,
                        seed: int, ci: float = 0.90) -> tuple[float, float, float]:
     """Block-bootstrap CI for the OLS slope of y on x (moving blocks of pairs)."""
-    x = np.asarray(x, float); y = np.asarray(y, float)
+    x = np.asarray(x, float)
+    y = np.asarray(y, float)
     n = len(x)
     def slope(xs, ys):
         if len(xs) < 2 or np.std(xs) == 0:   # constant regressor → slope undefined

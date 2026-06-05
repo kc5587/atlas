@@ -127,6 +127,10 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(row=(0,))
             if "table_name='event_drift'" in sql:
                 return Result(row=(0,))
+            if "table_name='vol_premium'" in sql:
+                return Result(row=(0,))
+            if "table_name='vol_termstructure'" in sql:
+                return Result(row=(0,))
             if "information_schema.tables" in sql:
                 return Result(row=(1,))
             if "fundamentals_leadlag" in sql:
@@ -215,3 +219,62 @@ def test_h2_confirmed_when_significant_positive_drift():
 
 def test_h2_null_when_insignificant():
     assert h2_record(_h2_row(slope=0.001, q=0.8))["verdict"] == "null"
+
+
+def test_h6_record_confirmed_when_premium_and_info():
+    from analysis.signals import h6_record
+
+    rows = pd.DataFrame([
+        {"pair": "^VIX~SPY", "implied": "^VIX", "underlying": "SPY",
+         "mean_vrp": 0.02, "vrp_lo": 0.012, "vrp_hi": 0.03,
+         "incremental_oos_r2": 0.08, "n_obs": 2500},
+        {"pair": "^VXN~QQQ", "implied": "^VXN", "underlying": "QQQ",
+         "mean_vrp": 0.03, "vrp_lo": 0.02, "vrp_hi": 0.04,
+         "incremental_oos_r2": 0.05, "n_obs": 2500},
+    ])
+    rec = h6_record(rows)
+    assert rec["id"] == "H6"
+    assert rec["verdict"] == "confirmed"
+    assert rec["chart"]["type"] == "vrp_term"
+    assert rec["stat"]["n"] == 2500
+    assert len(rec["evidence_chain"]) >= 2
+
+
+def test_h6_record_null_when_no_premium():
+    from analysis.signals import h6_record
+
+    rows = pd.DataFrame([
+        {"pair": "^VIX~SPY", "implied": "^VIX", "underlying": "SPY",
+         "mean_vrp": 0.001, "vrp_lo": -0.004, "vrp_hi": 0.006,
+         "incremental_oos_r2": -0.01, "n_obs": 2500},
+    ])
+    assert h6_record(rows)["verdict"] == "null"
+
+
+def test_h7_record_null_surfaces_min_q_cell():
+    from analysis.signals import h7_record
+
+    rows = pd.DataFrame([
+        {"target": "SPY", "horizon": 21, "corr": 0.04, "slope": 0.5, "slope_lo": -0.2,
+         "slope_hi": 1.2, "p_selection": 0.30, "q_value": 0.55, "oos_sign_rate": 0.5,
+         "n_obs": 2000, "contradicts_thesis": False},
+        {"target": "SOXX", "horizon": 63, "corr": 0.06, "slope": 0.8, "slope_lo": -0.1,
+         "slope_hi": 1.6, "p_selection": 0.12, "q_value": 0.40, "oos_sign_rate": 0.55,
+         "n_obs": 2000, "contradicts_thesis": False},
+    ])
+    rec = h7_record(rows)
+    assert rec["id"] == "H7"
+    assert rec["verdict"] == "null"
+    assert rec["chart"]["type"] == "termstructure_timing"
+    assert rec["stat"]["q_value"] == 0.40
+
+
+def test_h7_record_confirmed_when_cell_passes():
+    from analysis.signals import h7_record
+
+    rows = pd.DataFrame([
+        {"target": "SOXX", "horizon": 21, "corr": 0.12, "slope": 1.1, "slope_lo": 0.3,
+         "slope_hi": 1.9, "p_selection": 0.01, "q_value": 0.05, "oos_sign_rate": 0.7,
+         "n_obs": 2000, "contradicts_thesis": False},
+    ])
+    assert h7_record(rows)["verdict"] == "confirmed"
