@@ -22,13 +22,13 @@ const g: Graph = {
 };
 
 describe("computeLayout", () => {
-  it("assigns x by stage order (left to right)", () => {
+  it("assigns x by stage order with cloud as the terminus", () => {
     const { nodes } = computeLayout(g, { width: 800, height: 400 });
     const by = Object.fromEntries(nodes.map((n) => [n.id, n.x]));
     expect(by["asml"]).toBeLessThan(by["tsmc"]);
     expect(by["tsmc"]).toBeLessThan(by["nvidia"]);
-    expect(by["nvidia"]).toBeLessThan(by["msft"]);
-    expect(by["msft"]).toBeLessThan(by["vistra"]);
+    expect(by["nvidia"]).toBeLessThan(by["vistra"]); // chips < power
+    expect(by["vistra"]).toBeLessThan(by["msft"]);   // power < cloud (terminus)
   });
 
   it("gives every node a finite position", () => {
@@ -45,5 +45,26 @@ describe("computeLayout", () => {
     expect(back?.isBack).toBe(true);
     const fwd = edges.find((e) => e.from_id === "asml" && e.to_id === "tsmc");
     expect(fwd?.isBack).toBe(false);
+  });
+
+  it("hides new-stage nodes in story mode and shows them in explore", () => {
+    const g2: Graph = {
+      nodes: [
+        ...g.nodes,
+        { id: "arista", name: "Arista", tickers: ["ANET"], stage: "networking", region: "US", criticality: 1 },
+      ],
+      edges: [
+        ...g.edges,
+        { from_id: "arista", to_id: "msft", relationship: "supplies", note: "", evidence: "", as_of: "" },
+      ],
+    };
+    const story = computeLayout(g2, { width: 800, height: 400, mode: "story" });
+    expect(story.nodes.find((n) => n.id === "arista")).toBeUndefined();
+    // edge touching a hidden node is dropped (no dangling reference)
+    expect(story.edges.find((e) => e.from_id === "arista")).toBeUndefined();
+
+    const explore = computeLayout(g2, { width: 800, height: 400, mode: "explore" });
+    expect(explore.nodes.find((n) => n.id === "arista")).toBeDefined();
+    expect(explore.edges.find((e) => e.from_id === "arista")).toBeDefined();
   });
 });

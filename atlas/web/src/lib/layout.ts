@@ -1,7 +1,6 @@
 // src/lib/layout.ts
 import type { Edge, Graph, Node, Stage } from "./types";
-
-const STAGE_ORDER: Stage[] = ["equipment", "foundry", "chips", "cloud", "power"];
+import { stageOrder } from "./stages";
 
 export interface PositionedNode extends Node { x: number; y: number; col: number; }
 export interface RoutedEdge extends Edge { isBack: boolean; }
@@ -10,15 +9,27 @@ export interface LayoutOpts {
   height: number;
   padding?: number;
   // Extra space reserved on the left edge (e.g. for the story-mode narrative
-  // card). Columns start at `padding + leftInset` so the leftmost stage clears
-  // the card. Defaults to 0 (explore mode / no reservation).
+  // card). Columns start at `padding + leftInset`. Defaults to 0.
   leftInset?: number;
+  // "story" renders only the canonical stages; "explore" renders the full chain.
+  mode?: "story" | "explore";
 }
 
 export function computeLayout(graph: Graph, opts: LayoutOpts) {
   const pad = opts.padding ?? 60;
   const leftInset = opts.leftInset ?? 0;
-  const cols = STAGE_ORDER;
+  const mode = opts.mode ?? "story";
+  const cols = stageOrder(mode);
+  const colSet = new Set<Stage>(cols);
+
+  // In story mode, new-stage nodes are hidden. Drop edges touching them so the
+  // renderer never dereferences a missing node.
+  const visibleNodes = graph.nodes.filter((n) => colSet.has(n.stage));
+  const visibleIds = new Set(visibleNodes.map((n) => n.id));
+  const visibleEdges = graph.edges.filter(
+    (e) => visibleIds.has(e.from_id) && visibleIds.has(e.to_id),
+  );
+
   const left = pad + leftInset;
   const right = opts.width - pad;
   const colX = (i: number) =>
@@ -26,9 +37,8 @@ export function computeLayout(graph: Graph, opts: LayoutOpts) {
 
   const byStage = new Map<Stage, Node[]>();
   for (const s of cols) byStage.set(s, []);
-  for (const n of graph.nodes) (byStage.get(n.stage) ?? byStage.get("chips"))!.push(n);
+  for (const n of visibleNodes) byStage.get(n.stage)!.push(n);
 
-  // initial y: evenly spaced within each column
   const pos = new Map<string, PositionedNode>();
   cols.forEach((s, ci) => {
     const list = byStage.get(s)!;
@@ -47,8 +57,8 @@ export function computeLayout(graph: Graph, opts: LayoutOpts) {
     if (!arr) neighbours.set(a, (arr = []));
     arr.push(b);
   };
-  for (const e of graph.edges) { addNb(e.from_id, e.to_id); addNb(e.to_id, e.from_id); }
-  cols.forEach((s, ci) => {
+  for (const e of visibleEdges) { addNb(e.from_id, e.to_id); addNb(e.to_id, e.from_id); }
+  cols.forEach((s) => {
     const list = byStage.get(s)!.map((n) => pos.get(n.id)!);
     list.sort((a, b) => bary(a, neighbours, pos) - bary(b, neighbours, pos));
     list.forEach((n, i) => {
@@ -59,7 +69,7 @@ export function computeLayout(graph: Graph, opts: LayoutOpts) {
   });
 
   const colOf = (id: string) => pos.get(id)?.col ?? 0;
-  const edges: RoutedEdge[] = graph.edges.map((e) => ({
+  const edges: RoutedEdge[] = visibleEdges.map((e) => ({
     ...e,
     isBack: colOf(e.from_id) > colOf(e.to_id),
   }));
