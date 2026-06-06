@@ -71,6 +71,7 @@ H2_SURPRISE_K = 4
 FACTOR_TICKERS: dict[str, str] = {"market": "SPY", "semis": "SOXX", "cloud": "IGV"}
 STAGE_SECTOR: dict[str, str] = {
     "equipment": "semis", "foundry": "semis", "chips": "semis", "cloud": "cloud",
+    "networking": "semis",
 }
 LAG_MIN = 1
 LAG_MAX = MAX_LAG_DAYS  # one-sided, hypothesized direction only
