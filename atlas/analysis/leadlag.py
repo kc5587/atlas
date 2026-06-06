@@ -478,6 +478,7 @@ def run() -> None:  # pragma: no cover
             columns=["ticker", "period_end", "filed", "revenue", "capex", "gross_margin"]
         )
     core_nodes, core_edges = exclude_stage(nodes, edges, "power")
+    core_nodes, core_edges = exclude_stage(core_nodes, core_edges, "networking")
     legacy = build_leadlag_table(
         returns, macro, core_nodes, core_edges, fundamentals=fundamentals
     )
@@ -515,6 +516,20 @@ def run() -> None:  # pragma: no cover
     con.execute("CREATE OR REPLACE TABLE capex_price AS SELECT * FROM h5t")
     con.unregister("h5t")
     print(f"capex_price: wrote {len(h5)} capex->price edge rows")
+    from analysis.networking_signal import networking_propagation, networking_pricing
+    h11 = networking_propagation(fundamentals, nodes, edges,
+                                 iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+    con.register("h11t", h11)
+    con.execute("CREATE OR REPLACE TABLE networking_propagation AS SELECT * FROM h11t")
+    con.unregister("h11t")
+    print(f"networking_propagation: wrote {len(h11)} capex->revenue edge rows")
+    h12 = networking_pricing(fundamentals, returns, _factors, nodes, edges,
+                             horizons=H5_FORWARD_HORIZONS,
+                             iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+    con.register("h12t", h12)
+    con.execute("CREATE OR REPLACE TABLE networking_pricing AS SELECT * FROM h12t")
+    con.unregister("h12t")
+    print(f"networking_pricing: wrote {len(h12)} capex->price edge rows")
     from analysis.event_drift import event_drift
     h2 = event_drift(
         fundamentals,
