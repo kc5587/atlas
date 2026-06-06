@@ -2,7 +2,8 @@
   import * as d3 from "d3";
   import { computeLayout } from "../lib/layout";
   import { edgeStyle, leadLagFor } from "../lib/leadlag";
-  import type { Graph, LeadLag, Stage } from "../lib/types";
+  import type { Graph, LeadLag } from "../lib/types";
+  import { stageOrder, STAGE_COLOR, STAGE_LABEL } from "../lib/stages";
 
   let { graph, leadlag, highlight = null, showLeadLag = false, mode = "story", onSelect = (_: string) => {} }:
     { graph: Graph; leadlag: LeadLag[]; highlight?: Set<string> | null; showLeadLag?: boolean;
@@ -12,13 +13,6 @@
   let width = $state(960);
   let height = $state(560);
 
-  const STAGES: { key: Stage; label: string }[] = [
-    { key: "equipment", label: "EQUIPMENT" },
-    { key: "foundry", label: "FOUNDRY" },
-    { key: "chips", label: "CHIPS" },
-    { key: "cloud", label: "CLOUD" },
-    { key: "power", label: "POWER" },
-  ];
   const HEADER_Y = 22;
   // Reserve left space in STORY mode so the leftmost (equipment) column clears
   // the ~460px narrative card. EXPLORE mode pans/zooms freely, so no inset.
@@ -27,7 +21,8 @@
   $effect(() => {
     if (!svgEl) return;
     const leftInset = mode === "story" ? STORY_LEFT_INSET : 0;
-    const { nodes, edges } = computeLayout(graph, { width, height, leftInset });
+    const STAGES = stageOrder(mode).map((key) => ({ key, label: STAGE_LABEL[key] }));
+    const { nodes, edges } = computeLayout(graph, { width, height, leftInset, mode });
     const byId = new Map(nodes.map((n) => [n.id, n]));
     const svg = d3.select(svgEl);
     svg.selectAll("*").remove();
@@ -54,7 +49,7 @@
       .attr("font-size", 12)
       .attr("font-weight", 700)
       .attr("letter-spacing", "0.08em")
-      .attr("fill", (d) => stageColor(d.key))
+      .attr("fill", (d) => STAGE_COLOR[d.key])
       .text((d) => d.label);
 
     g.selectAll("path.edge").data(edges).join("path")
@@ -145,7 +140,7 @@
       .on("click", (_, n) => onSelect(n.id));
     node.append("circle")
       .attr("r", (n) => 8 + 3 * Math.sqrt(n.criticality))
-      .attr("fill", (n) => stageColor(n.stage))
+      .attr("fill", (n) => STAGE_COLOR[n.stage])
       .attr("opacity", (n) => (dimNode(n.id) ? 0.12 : 1));
     node.append("circle")
       .attr("class", "hit-target")
@@ -168,25 +163,15 @@
     };
   });
 
-  function stageColor(s: string) {
-    return {
-      equipment: "#6c8ebf",
-      foundry: "#9673a6",
-      chips: "#82b366",
-      cloud: "#d79b00",
-      power: "#b5563a",
-    }[s] ?? "#888";
-  }
+
 </script>
 
 <div class="map-wrap">
   <svg bind:this={svgEl} viewBox={`0 0 ${width} ${height}`} style="width:100%;height:100%;background:#0d1422" role="img" aria-label="AI value chain map"></svg>
   <div class="legend" aria-hidden="true">
-    <span><i style="background:#6c8ebf"></i>Equipment</span>
-    <span><i style="background:#9673a6"></i>Foundry</span>
-    <span><i style="background:#82b366"></i>Chips</span>
-    <span><i style="background:#d79b00"></i>Cloud</span>
-    <span><i style="background:#b5563a"></i>Power</span>
+    {#each stageOrder(mode) as s}
+      <span><i style="background:{STAGE_COLOR[s]}"></i>{STAGE_LABEL[s].charAt(0) + STAGE_LABEL[s].slice(1).toLowerCase()}</span>
+    {/each}
     <span class="sep"><i class="solid"></i>forward</span>
     <span><i class="dashed"></i>back/in-house</span>
   </div>
