@@ -139,6 +139,16 @@ def bh_fdr(pvalues: np.ndarray) -> np.ndarray:
     return q
 
 
+def exclude_stage(
+    nodes: pd.DataFrame, edges: pd.DataFrame, stage: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Drop nodes in `stage` and any edge touching them from analysis scans."""
+    core_nodes = nodes[nodes["stage"] != stage]
+    keep = set(core_nodes["id"])
+    core_edges = edges[edges["from_id"].isin(keep) & edges["to_id"].isin(keep)]
+    return core_nodes.reset_index(drop=True), core_edges.reset_index(drop=True)
+
+
 _LEADLAG_COLUMNS = [
     "pair_type", "left", "right", "lag", "corr", "p_value", "q_value", "n_eff", "stable",
 ]
@@ -467,16 +477,19 @@ def run() -> None:  # pragma: no cover
         fundamentals = pd.DataFrame(
             columns=["ticker", "period_end", "filed", "revenue", "capex", "gross_margin"]
         )
-    legacy = build_leadlag_table(returns, macro, nodes, edges, fundamentals=fundamentals)
+    core_nodes, core_edges = exclude_stage(nodes, edges, "power")
+    legacy = build_leadlag_table(
+        returns, macro, core_nodes, core_edges, fundamentals=fundamentals
+    )
     non_edge = legacy[legacy["pair_type"] != "edge"]
     hardened = pd.DataFrame(build_hardened_edges(
-        returns, nodes, edges, iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED))
+        returns, core_nodes, core_edges, iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED))
     combined = pd.concat([non_edge, hardened], ignore_index=True)
     con.register("ll", combined)
     con.execute("CREATE OR REPLACE TABLE leadlag AS SELECT * FROM ll")
     con.unregister("ll")
     from analysis.fundamentals_leadlag import capex_revenue_edges
-    h1 = capex_revenue_edges(fundamentals, nodes, edges,
+    h1 = capex_revenue_edges(fundamentals, core_nodes, core_edges,
                              iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
     con.register("h1t", h1)
     con.execute("CREATE OR REPLACE TABLE fundamentals_leadlag AS SELECT * FROM h1t")
@@ -492,8 +505,8 @@ def run() -> None:  # pragma: no cover
         fundamentals,
         returns,
         _factors,
-        nodes,
-        edges,
+        core_nodes,
+        core_edges,
         horizons=H5_FORWARD_HORIZONS,
         iters=BOOTSTRAP_ITERS,
         seed=RANDOM_SEED,
@@ -507,8 +520,8 @@ def run() -> None:  # pragma: no cover
         fundamentals,
         returns,
         _factors,
-        nodes,
-        edges,
+        core_nodes,
+        core_edges,
         horizons=H2_DRIFT_HORIZONS,
         iters=BOOTSTRAP_ITERS,
         seed=RANDOM_SEED,

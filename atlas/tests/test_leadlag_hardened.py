@@ -209,3 +209,21 @@ def test_legacy_edge_macro_and_fundamental_rows_are_preserved():
     )
     assert {"edge", "macro", "fund_capex_rev", "fund_capex_price"}.issubset(set(table["pair_type"]))
     assert (table["q_value"] <= 1.0).all()
+
+
+def test_exclude_stage_drops_power_nodes_and_their_edges():
+    from analysis.leadlag import exclude_stage
+
+    nodes = pd.DataFrame([
+        {"id": "nvidia", "stage": "chips", "tickers": json.dumps(["NVDA"])},
+        {"id": "microsoft", "stage": "cloud", "tickers": json.dumps(["MSFT"])},
+        {"id": "vistra", "stage": "power", "tickers": json.dumps(["VST"])},
+    ])
+    edges = pd.DataFrame([
+        {"from_id": "nvidia", "to_id": "microsoft"},
+        {"from_id": "microsoft", "to_id": "vistra"},
+    ])
+    cn, ce = exclude_stage(nodes, edges, "power")
+    assert set(cn["id"]) == {"nvidia", "microsoft"}
+    assert len(ce) == 1
+    assert ce.iloc[0]["to_id"] == "microsoft"
