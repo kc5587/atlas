@@ -133,6 +133,8 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(row=(0,))
             if "table_name='leading_revenue'" in sql:
                 return Result(row=(0,))
+            if "table_name='power_margins'" in sql:
+                return Result(row=(0,))
             if "table_name='macro_sector'" in sql:
                 return Result(row=(0,))
             if "information_schema.tables" in sql:
@@ -433,3 +435,23 @@ def test_h8_caveat_names_driver_and_flags_korea_canary():
     joined = " ".join(rec["caveats"])
     assert "CAPUTLG3344S" in joined
     assert "Korea export 'canary'" in joined
+
+
+def test_h9_record_confirmed_compression_and_null():
+    from analysis.signals import h9_record
+
+    conf = pd.DataFrame([
+        {"indicator": "WPU0543", "best_lead": 1, "corr": 0.4, "slope": 0.02,
+         "slope_lo": 0.005, "slope_hi": 0.04, "p_selection": 0.002, "q_value": 0.01,
+         "n_obs": 45, "contradicts_thesis": False},
+    ])
+    rec = h9_record(conf)
+    assert rec["id"] == "H9" and rec["verdict"] == "confirmed"
+    assert rec["chart"]["type"] == "power_margins"
+
+    nul = pd.DataFrame([
+        {"indicator": "WPU0543", "best_lead": 0, "corr": 0.05, "slope": 0.001,
+         "slope_lo": -0.01, "slope_hi": 0.02, "p_selection": 0.5, "q_value": 0.7,
+         "n_obs": 45, "contradicts_thesis": False},
+    ])
+    assert h9_record(nul)["verdict"] == "null"

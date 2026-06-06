@@ -316,6 +316,58 @@ def h8_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h9_record(rows: pd.DataFrame) -> dict:
+    """H9: does electricity cost compress cloud gross margins?"""
+    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
+    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
+                     & (~elig["contradicts_thesis"])]
+    suggestive = elig[(elig["q_value"] <= 0.25) & (elig["slope"] > 0)
+                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
+    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
+    if len(confirmed):
+        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
+    elif len(suggestive):
+        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
+    elif len(contradicting):
+        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
+    elif len(elig):
+        verdict, best = "null", elig.sort_values("q_value").iloc[0]
+    else:
+        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    interp = {
+        "confirmed": "rising power cost compresses cloud margins",
+        "suggestive": "weak compression signal",
+        "null": "no measurable margin compression (small, hedged input)",
+        "contradicts": "power cost moves margins UP (implausible)",
+    }[verdict]
+    n = int(best.get("n_obs")) if len(elig) else 0
+    return {
+        "id": "H9", "title": "Does electricity cost compress cloud margins?",
+        "horizon": "0-2 quarters",
+        "claim": "Rising electricity price compresses cloud gross margins",
+        "mechanism": f"Power is a real datacenter opex -- {interp}",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "best price->margin corr", "metric": "corr",
+             "value": _num(best.get("corr"))},
+            {"stage": "compression slope", "metric": "slope",
+             "value": _num(best.get("slope"))},
+            {"stage": "selection-aware q", "metric": "q",
+             "value": _num(best.get("q_value"))},
+        ],
+        "stat": {"name": "compression_slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
+        "caveats": [
+            "Slope is of Δgross-margin on NEGATED price YoY; >0 = compression.",
+            "Blended gross margin (not datacenter-segment); power is small & PPA-hedged. No walk-forward.",
+        ],
+        "chart": {"type": "power_margins", "ref": "h9"},
+        "detail_rows": elig[["indicator", "best_lead", "corr", "slope", "slope_lo",
+                             "slope_hi", "q_value", "n_obs"]].to_dict("records"),
+    }
+
+
 def h4_record(rows: pd.DataFrame) -> dict:
     """H4: is the chip cycle already priced into semis equity returns?"""
     elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
@@ -470,6 +522,12 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h8 = con.execute('SELECT * FROM leading_revenue').df()
         if len(h8):
             records.append(h8_record(h8))
+    has_h9 = con.execute("SELECT count(*) FROM information_schema.tables "
+                         "WHERE table_name='power_margins'").fetchone()[0] > 0
+    if has_h9:
+        h9 = con.execute('SELECT * FROM power_margins').df()
+        if len(h9):
+            records.append(h9_record(h9))
     has_h4 = con.execute("SELECT count(*) FROM information_schema.tables "
                          "WHERE table_name='macro_sector'").fetchone()[0] > 0
     if has_h4:
