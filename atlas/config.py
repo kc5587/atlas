@@ -23,6 +23,8 @@ FRED_SERIES: dict[str, str] = {
     "CAPUTLG3344S": "Capacity Utilization: Semiconductors & Electronic Components",
     "PCU334413334413": "PPI: Semiconductor & Related Device Manufacturing",
     "A34SNO": "New Orders: Computers & Electronic Products",
+    "WPU0543": "PPI: Electric Power",
+    "IPG2211A2N": "Industrial Production: Electric Power Generation",
 }
 
 PRICE_START = "2010-01-01"
@@ -119,4 +121,14 @@ INDICATOR_PUB_LAG_MONTHS: dict[str, int] = {
     "CAPUTLG3344S": 1,
     "PCU334413334413": 1,
     "A34SNO": 2,
+    "WPU0543": 1,
+    "IPG2211A2N": 1,
 }
+
+# Track 3: power / datacenter "forgotten plays".
+POWER_NAMES: list[str] = ["VST", "NRG", "CEG", "ETN", "VRT", "D"]
+POWER_PRICE_SERIES: tuple[str, ...] = ("WPU0543",)
+POWER_DEMAND_SERIES: tuple[str, ...] = ("IPG2211A2N",)
+H9_LEAD_QUARTERS: tuple[int, ...] = (0, 1, 2)
+H10_HORIZON_MONTHS: tuple[int, ...] = (1, 2, 3)
+CLOUD_MARGIN_NAMES: list[str] = ["MSFT", "GOOGL", "AMZN", "ORCL"]
