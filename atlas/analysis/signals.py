@@ -281,6 +281,21 @@ def h8_record(rows: pd.DataFrame) -> dict:
         "contradicts": "indicator moves opposite to revenue",
     }[verdict]
     n = int(best.get("n_obs")) if len(elig) else 0
+    caveats = [
+        "Target = cross-sectional median revenue YoY of 6 US semis filers (ASML/TSM excluded).",
+        "Korea exports are TOTAL, not semis-only; indicators publication-lagged (PIT). No walk-forward (small sample).",
+    ]
+    if len(elig) > 1 and verdict in ("confirmed", "suggestive"):
+        # Name the indicator that actually drives the verdict and how many of the
+        # family did NOT pass -- the headline 'canary' may not be the one that leads.
+        others = elig[elig["indicator"] != best.get("indicator")]
+        n_fail = int((others["q_value"] > FDR_ALPHA).sum())
+        note = (f"Confirmed by {best.get('indicator')} alone; {n_fail} of {len(others)} "
+                f"other indicators did not pass FDR")
+        if (others["indicator"] == "XTEXVA01KRM664S").any() and bool(
+                (others.loc[others["indicator"] == "XTEXVA01KRM664S", "q_value"] > FDR_ALPHA).all()):
+            note += " (incl. the Korea export 'canary')"
+        caveats.append(note + ".")
     return {
         "id": "H8", "title": "Does the chip-cycle canary lead chip-maker revenue?",
         "horizon": "1-2 quarters", "claim": "Leading indicators lead semis-sector revenue",
@@ -294,10 +309,7 @@ def h8_record(rows: pd.DataFrame) -> dict:
         "stat": {"name": "slope", "value": _num(best.get("slope")),
                  "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
                  "q_value": _num(best.get("q_value")), "n": n},
-        "caveats": [
-            "Target = cross-sectional median revenue YoY of 6 US semis filers (ASML/TSM excluded).",
-            "Korea exports are TOTAL, not semis-only; indicators publication-lagged (PIT). No walk-forward (small sample).",
-        ],
+        "caveats": caveats,
         "chart": {"type": "leading_revenue", "ref": "h8"},
         "detail_rows": elig[["indicator", "best_lead", "corr", "slope", "slope_lo",
                              "slope_hi", "q_value", "n_obs"]].to_dict("records"),

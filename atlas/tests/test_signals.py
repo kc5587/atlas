@@ -416,3 +416,20 @@ def test_h7_confirmed_framed_as_risk_premium_not_alpha():
     assert "risk" in mech and "premium" in mech
     assert "harvestable" not in mech and "not priced in" not in mech
     assert any("risk premium" in c.lower() for c in rec["caveats"])
+
+
+def test_h8_caveat_names_driver_and_flags_korea_canary():
+    from analysis.signals import h8_record
+    rows = pd.DataFrame([
+        {"indicator": "CAPUTLG3344S", "best_lead": 1, "corr": 0.45, "slope": 2.6,
+         "slope_lo": 1.7, "slope_hi": 4.1, "p_selection": 0.009, "q_value": 0.045,
+         "n_obs": 60, "contradicts_thesis": False},
+        {"indicator": "XTEXVA01KRM664S", "best_lead": 1, "corr": 0.13, "slope": 0.6,
+         "slope_lo": -0.24, "slope_hi": 1.9, "p_selection": 0.37, "q_value": 0.39,
+         "n_obs": 60, "contradicts_thesis": False},
+    ])
+    rec = h8_record(rows)
+    assert rec["verdict"] == "confirmed"
+    joined = " ".join(rec["caveats"])
+    assert "CAPUTLG3344S" in joined
+    assert "Korea export 'canary'" in joined
