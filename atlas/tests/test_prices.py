@@ -43,3 +43,11 @@ def test_run_default_ticker_list_includes_aux_tickers():
 
     assert "QQQ" in AUX_TICKERS
     assert "AUX_TICKERS" in inspect.getsource(p.run)
+
+
+def test_run_default_ticker_list_includes_power_names():
+    import ingest.prices as p
+    from config import POWER_NAMES
+
+    assert POWER_NAMES[0] == "VST"
+    assert "POWER_NAMES" in inspect.getsource(p.run)
