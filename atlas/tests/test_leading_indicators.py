@@ -125,3 +125,19 @@ def test_leading_revenue_table_shapes_and_fdr():
     ):
         assert col in out.columns
     assert out["q_value"].notna().any()
+
+
+def test_degenerate_lead_excluded_from_selection_p():
+    # A lead with too few aligned observations must not change the selection-aware p:
+    # observed selection and the perturbation null search the identical eligible lead set.
+    from analysis.leading_indicators import indicator_revenue_lead
+
+    rng = np.random.default_rng(9)
+    q = pd.period_range("2008Q1", periods=40, freq="Q")
+    ind = pd.Series(rng.normal(0, 0.05, 40), index=q)
+    rev = pd.Series(0.8 * ind.shift(1).fillna(0).to_numpy() + rng.normal(0, 0.01, 40), index=q)
+    full = indicator_revenue_lead(ind, rev, leads=(1, 39), iters=200, seed=1)  # lead 39 degenerate
+    only = indicator_revenue_lead(ind, rev, leads=(1,), iters=200, seed=1)
+    assert full["best_lead"] == only["best_lead"] == 1
+    assert full["p_selection"] == only["p_selection"]
+    assert full["n_obs"] == only["n_obs"]

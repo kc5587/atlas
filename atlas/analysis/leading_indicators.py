@@ -66,6 +66,10 @@ def indicator_revenue_lead(
 ) -> dict:
     """Best one-sided lead of a quarterly indicator over revenue YoY."""
     per_lead = {lead: _aligned_lead(indicator_q, revenue_q, lead) for lead in leads}
+    # Selection and the perturbation null must search the IDENTICAL lead set; drop
+    # leads with too few aligned observations up front so the selection-aware p stays
+    # conservative (review M1).
+    per_lead = {lead: (x, y) for lead, (x, y) in per_lead.items() if len(x) >= 3}
     best_lead = None
     best_corr = -np.inf
     best = None
