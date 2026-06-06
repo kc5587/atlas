@@ -28,3 +28,23 @@ def test_indicator_yoy_pit_lag():
     assert yoy.index.min() == pd.Timestamp("2019-02-01")
     assert abs(yoy.iloc[0] - 0.12) < 0.02
     assert yoy.isna().sum() == 0
+
+
+def test_sector_revenue_yoy_median():
+    from analysis.leading_indicators import sector_revenue_yoy
+
+    rows = []
+    for tkr, base in [("NVDA", 100.0), ("AMD", 50.0)]:
+        for i, q in enumerate(pd.period_range("2018Q1", periods=12, freq="Q")):
+            rows.append(
+                {
+                    "ticker": tkr,
+                    "period_end": q.to_timestamp(how="end"),
+                    "revenue": base * (1.10 ** i),
+                }
+            )
+    fund = pd.DataFrame(rows)
+    agg = sector_revenue_yoy(fund, names=["NVDA", "AMD"])
+
+    assert abs(agg.dropna().iloc[0] - np.log(1.10 ** 4)) < 1e-6
+    assert isinstance(agg.index, pd.PeriodIndex)
