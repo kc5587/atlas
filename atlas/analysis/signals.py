@@ -304,6 +304,57 @@ def h8_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h4_record(rows: pd.DataFrame) -> dict:
+    """H4: is the chip cycle already priced into semis equity returns?"""
+    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
+    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
+                     & (~elig["contradicts_thesis"])
+                     & (elig["oos_sign_rate"] >= OOS_SIGN_FLOOR)]
+    suggestive = elig[(elig["q_value"] <= 0.25) & (elig["slope"] > 0)
+                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
+    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
+    if len(confirmed):
+        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
+    elif len(suggestive):
+        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
+    elif len(contradicting):
+        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
+    elif len(elig):
+        verdict, best = "null", elig.sort_values("q_value").iloc[0]
+    else:
+        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    interp = {
+        "confirmed": "the public cycle still predicts forward returns (under-priced)",
+        "suggestive": "weak predictive signal",
+        "null": "priced in -- a public canary everyone watches",
+        "contradicts": "predicts forward returns the wrong way",
+    }[verdict]
+    n = int(best.get("n_obs")) if len(elig) else 0
+    return {
+        "id": "H4", "title": "Is the chip cycle already priced into semis equity?",
+        "horizon": "1-3 months",
+        "claim": "Chip-cycle indicators predict forward semis (SOXX) returns",
+        "mechanism": f"A public macro canary; markets should price it -- {interp}",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "best-cell corr", "metric": "corr", "value": _num(best.get("corr"))},
+            {"stage": "best-cell slope", "metric": "slope", "value": _num(best.get("slope"))},
+            {"stage": "OOS sign-retention", "metric": "rate",
+             "value": _num(best.get("oos_sign_rate"))},
+        ],
+        "stat": {"name": "slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
+        "caveats": [
+            "Indicators publication-lagged (PIT); monthly walk-forward; observational, no costs.",
+            "Family = indicators x {1,2,3}m horizons, BH-FDR corrected; Korea exports are total, not semis-only.",
+        ],
+        "chart": {"type": "macro_sector", "ref": "h4"},
+        "detail_rows": elig[["indicator", "horizon", "corr", "slope", "slope_lo",
+                             "slope_hi", "q_value", "oos_sign_rate", "n_obs"]].to_dict("records"),
+    }
+
+
 def h5_record(rows: pd.DataFrame) -> dict:
     elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
     n = int(len(elig))
@@ -407,4 +458,10 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h8 = con.execute('SELECT * FROM leading_revenue').df()
         if len(h8):
             records.append(h8_record(h8))
+    has_h4 = con.execute("SELECT count(*) FROM information_schema.tables "
+                         "WHERE table_name='macro_sector'").fetchone()[0] > 0
+    if has_h4:
+        h4 = con.execute('SELECT * FROM macro_sector').df()
+        if len(h4):
+            records.append(h4_record(h4))
     return records

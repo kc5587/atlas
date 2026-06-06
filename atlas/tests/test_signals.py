@@ -133,6 +133,8 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(row=(0,))
             if "table_name='leading_revenue'" in sql:
                 return Result(row=(0,))
+            if "table_name='macro_sector'" in sql:
+                return Result(row=(0,))
             if "information_schema.tables" in sql:
                 return Result(row=(1,))
             if "fundamentals_leadlag" in sql:
@@ -275,6 +277,68 @@ def test_h8_record_confirmed_and_null():
         ]
     )
     assert h8_record(nullish)["verdict"] == "null"
+
+
+def test_h4_record_null_surfaces_min_q():
+    from analysis.signals import h4_record
+
+    rows = pd.DataFrame(
+        [
+            {
+                "indicator": "IPG3344S",
+                "horizon": 1,
+                "corr": 0.05,
+                "slope": 0.4,
+                "slope_lo": -0.3,
+                "slope_hi": 1.1,
+                "p_selection": 0.3,
+                "q_value": 0.5,
+                "oos_sign_rate": 0.5,
+                "n_obs": 150,
+                "contradicts_thesis": False,
+            },
+            {
+                "indicator": "A34SNO",
+                "horizon": 3,
+                "corr": 0.07,
+                "slope": 0.6,
+                "slope_lo": -0.1,
+                "slope_hi": 1.3,
+                "p_selection": 0.12,
+                "q_value": 0.3,
+                "oos_sign_rate": 0.55,
+                "n_obs": 150,
+                "contradicts_thesis": False,
+            },
+        ]
+    )
+    rec = h4_record(rows)
+    assert rec["id"] == "H4" and rec["verdict"] == "null"
+    assert rec["chart"]["type"] == "macro_sector"
+    assert rec["stat"]["q_value"] == 0.3
+
+
+def test_h4_record_confirmed():
+    from analysis.signals import h4_record
+
+    rows = pd.DataFrame(
+        [
+            {
+                "indicator": "IPG3344S",
+                "horizon": 3,
+                "corr": 0.3,
+                "slope": 0.9,
+                "slope_lo": 0.4,
+                "slope_hi": 1.4,
+                "p_selection": 0.001,
+                "q_value": 0.01,
+                "oos_sign_rate": 0.8,
+                "n_obs": 150,
+                "contradicts_thesis": False,
+            },
+        ]
+    )
+    assert h4_record(rows)["verdict"] == "confirmed"
 
 
 def test_h6_record_confirmed_when_premium_and_info():
