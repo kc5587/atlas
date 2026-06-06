@@ -68,3 +68,60 @@ def test_indicator_revenue_lead_detects_planted_lead():
     assert out["p_selection"] < 0.05
     assert out["slope_lo"] > 0
     assert out["n_obs"] >= 40
+
+
+def _macro_long(series_levels, start="2008-01-01", n=120):
+    idx = pd.date_range(start, periods=n, freq="MS")
+    frames = []
+    for sid, level in series_levels.items():
+        frames.append(pd.DataFrame({"series_id": sid, "date": idx, "value": level(idx)}))
+    return pd.concat(frames, ignore_index=True)
+
+
+def test_leading_revenue_table_shapes_and_fdr():
+    from analysis.leading_indicators import leading_revenue_table
+
+    rng = np.random.default_rng(2)
+    macro = _macro_long(
+        {
+            "IPG3344S": lambda i: np.exp(np.linspace(0, 0.6, len(i)))
+            * (1 + rng.normal(0, 0.01, len(i))),
+            "A34SNO": lambda i: np.exp(np.linspace(0, 0.3, len(i)))
+            * (1 + rng.normal(0, 0.01, len(i))),
+        }
+    )
+    rows = []
+    for tkr in ["NVDA", "AMD"]:
+        for k, q in enumerate(pd.period_range("2008Q1", periods=40, freq="Q")):
+            rows.append(
+                {
+                    "ticker": tkr,
+                    "period_end": q.to_timestamp(how="end"),
+                    "revenue": 100 * (1.05 ** k),
+                }
+            )
+    fund = pd.DataFrame(rows)
+    out = leading_revenue_table(
+        macro,
+        fund,
+        indicators=("IPG3344S", "A34SNO"),
+        names=["NVDA", "AMD"],
+        leads=(1, 2),
+        pub_lag={"IPG3344S": 1, "A34SNO": 2},
+        iters=200,
+        seed=7,
+    )
+
+    assert set(out["indicator"]) == {"IPG3344S", "A34SNO"}
+    for col in (
+        "best_lead",
+        "slope",
+        "slope_lo",
+        "slope_hi",
+        "p_selection",
+        "q_value",
+        "n_obs",
+        "contradicts_thesis",
+    ):
+        assert col in out.columns
+    assert out["q_value"].notna().any()

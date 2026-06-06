@@ -112,3 +112,71 @@ def indicator_revenue_lead(
         "n_obs": int(len(x)),
         "contradicts_thesis": bool(slope < 0),
     }
+
+
+def _quarterly_indicator(macro: pd.DataFrame, sid: str, pub_lag_months: int) -> pd.Series:
+    """Monthly FRED series to PIT-lagged YoY, averaged by calendar quarter."""
+    sub = macro.loc[macro["series_id"] == sid, ["date", "value"]].dropna()
+    if sub.empty:
+        return pd.Series(dtype=float)
+    series = pd.Series(
+        sub["value"].to_numpy(float),
+        index=pd.to_datetime(sub["date"]),
+    ).sort_index()
+    yoy = indicator_yoy(series, pub_lag_months=pub_lag_months)
+    if yoy.empty:
+        return pd.Series(dtype=float)
+    return yoy.groupby(yoy.index.to_period("Q")).mean()
+
+
+def _empty_leading_row(sid: str, lead: int) -> dict:
+    return {
+        "indicator": sid,
+        "best_lead": lead,
+        "corr": np.nan,
+        "slope": np.nan,
+        "slope_lo": np.nan,
+        "slope_hi": np.nan,
+        "p_selection": 1.0,
+        "n_obs": 0,
+        "contradicts_thesis": False,
+    }
+
+
+def leading_revenue_table(
+    macro: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+    *,
+    indicators: tuple[str, ...],
+    names: list[str],
+    leads: tuple[int, ...],
+    pub_lag: dict[str, int],
+    iters: int,
+    seed: int,
+) -> pd.DataFrame:
+    """One row per indicator: best lead over sector revenue YoY with BH-FDR."""
+    from analysis.leadlag import bh_fdr
+
+    revenue_q = sector_revenue_yoy(fundamentals, names=names)
+    rows = []
+    for sid in indicators:
+        indicator_q = _quarterly_indicator(macro, sid, pub_lag.get(sid, 1))
+        if indicator_q.empty or revenue_q.empty:
+            rows.append(_empty_leading_row(sid, leads[0]))
+            continue
+        out = indicator_revenue_lead(
+            indicator_q,
+            revenue_q,
+            leads=leads,
+            iters=iters,
+            seed=seed,
+        )
+        out["indicator"] = sid
+        rows.append(out)
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        eligible = df["slope"].notna()
+        df["q_value"] = np.nan
+        if eligible.any():
+            df.loc[eligible, "q_value"] = bh_fdr(df.loc[eligible, "p_selection"].to_numpy())
+    return df
