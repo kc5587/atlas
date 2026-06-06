@@ -122,6 +122,50 @@ nodes:
     tickers: [D]
     stage: power
     region: US
+  # --- eda (Layer 3 / explore-only) ---
+  - id: synopsys
+    name: Synopsys
+    tickers: [SNPS]
+    stage: eda
+    region: US
+  - id: cadence
+    name: Cadence Design Systems
+    tickers: [CDNS]
+    stage: eda
+    region: US
+  # --- packaging / OSAT (explore-only) ---
+  - id: amkor
+    name: Amkor Technology
+    tickers: [AMKR]
+    stage: packaging
+    region: US
+  # --- networking / interconnect (explore-only) ---
+  - id: arista
+    name: Arista Networks
+    tickers: [ANET]
+    stage: networking
+    region: US
+  - id: marvell
+    name: Marvell Technology
+    tickers: [MRVL]
+    stage: networking
+    region: US
+  - id: astera_labs
+    name: Astera Labs
+    tickers: [ALAB]
+    stage: networking
+    region: US
+  # --- grid / power buildout (explore-only) ---
+  - id: ge_vernova
+    name: GE Vernova
+    tickers: [GEV]
+    stage: grid
+    region: US
+  - id: quanta
+    name: Quanta Services
+    tickers: [PWR]
+    stage: grid
+    region: US
 edges:
   # --- equipment -> foundry ---
   - from: asml

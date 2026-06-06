@@ -136,6 +136,18 @@ def test_new_stages_validate(tmp_path):
     assert nodes.loc[nodes["id"] == "arista", "stage"].iloc[0] == "networking"
 
 
+def test_seed_has_new_stage_nodes():
+    from config import SEED_PATH
+
+    nodes, _ = load_graph(SEED_PATH)
+    by_stage = nodes.groupby("stage")["id"].apply(set).to_dict()
+    assert by_stage.get("eda") == {"synopsys", "cadence"}
+    assert by_stage.get("packaging") == {"amkor"}
+    assert by_stage.get("networking") == {"arista", "marvell", "astera_labs"}
+    assert by_stage.get("grid") == {"ge_vernova", "quanta"}
+    assert len(nodes) == 29
+
+
 def test_power_stage_nodes_and_edges_load():
     from config import SEED_PATH
 
