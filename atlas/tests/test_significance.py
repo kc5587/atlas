@@ -74,3 +74,22 @@ def test_null_cross_corr_centered_on_zero():
     b = rng.standard_normal(1000)    # independent
     out = selection_aware(a, b, lag_min=1, lag_max=20, iters=800, seed=1)
     assert out["p_selection"] > 0.1  # nothing real => not significant
+
+
+def test_auto_block_length_handles_highly_persistent_series():
+    # Regression: a strongly autocorrelated series (e.g. H6's overlapping realized-
+    # variance VRP) pushes the flat-top bandwidth M=2m past the computed autocorr
+    # array, which used to IndexError. Must return a valid clamped block length.
+    import numpy as np
+
+    from analysis.significance import auto_block_length
+
+    rng = np.random.default_rng(0)
+    n, phi = 5000, 0.95
+    x = np.empty(n)
+    x[0] = 0.0
+    for i in range(1, n):
+        x[i] = phi * x[i - 1] + rng.normal(0.0, 1.0)
+    b = auto_block_length(x)
+    assert isinstance(b, int)
+    assert 1 <= b <= n // 3

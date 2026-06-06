@@ -40,7 +40,11 @@ def auto_block_length(x: np.ndarray, *, fallback: int = BOOTSTRAP_BLOCK) -> int:
             break
     else:
         m = max_lag // 2
-    M = max(1, 2 * m)
+    # Clamp the flat-top bandwidth to the autocorrelations actually computed: for a
+    # highly persistent series (e.g. overlapping realized-variance windows) 2*m can
+    # exceed max_lag, which would index past `rho`. Non-persistent series have 2*m <
+    # max_lag, so this is a no-op for them and existing verdicts are unchanged.
+    M = max(1, min(2 * m, max_lag))
     lags = np.arange(-M, M + 1)
     rho_sym = np.array([rho[abs(int(k))] for k in lags])
     # Flat-top lag window weights.
