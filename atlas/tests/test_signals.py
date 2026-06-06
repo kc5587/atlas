@@ -135,6 +135,8 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(row=(0,))
             if "table_name='power_margins'" in sql:
                 return Result(row=(0,))
+            if "table_name='power_demand'" in sql:
+                return Result(row=(0,))
             if "table_name='macro_sector'" in sql:
                 return Result(row=(0,))
             if "information_schema.tables" in sql:
@@ -455,3 +457,27 @@ def test_h9_record_confirmed_compression_and_null():
          "n_obs": 45, "contradicts_thesis": False},
     ])
     assert h9_record(nul)["verdict"] == "null"
+
+
+def test_h10_record_null_and_confirmed():
+    from analysis.signals import h10_record
+
+    nul = pd.DataFrame([
+        {"name": "VST", "horizon": 1, "corr": 0.05, "slope": 0.4, "slope_lo": -0.3,
+         "slope_hi": 1.1, "p_selection": 0.3, "q_value": 0.5, "oos_sign_rate": 0.5,
+         "n_obs": 120, "contradicts_thesis": False},
+        {"name": "ETN", "horizon": 3, "corr": 0.07, "slope": 0.6, "slope_lo": -0.1,
+         "slope_hi": 1.3, "p_selection": 0.12, "q_value": 0.3, "oos_sign_rate": 0.55,
+         "n_obs": 150, "contradicts_thesis": False},
+    ])
+    rec = h10_record(nul)
+    assert rec["id"] == "H10" and rec["verdict"] == "null"
+    assert rec["chart"]["type"] == "power_demand"
+    assert rec["stat"]["q_value"] == 0.3
+
+    conf = pd.DataFrame([
+        {"name": "CEG", "horizon": 3, "corr": 0.3, "slope": 1.0, "slope_lo": 0.4,
+         "slope_hi": 1.6, "p_selection": 0.001, "q_value": 0.01, "oos_sign_rate": 0.8,
+         "n_obs": 120, "contradicts_thesis": False},
+    ])
+    assert h10_record(conf)["verdict"] == "confirmed"
