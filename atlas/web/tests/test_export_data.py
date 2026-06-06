@@ -56,7 +56,10 @@ def test_export_all_writes_expected_files(tmp_path):
     assert graph["edges"][0]["from_id"] == "nvidia"
     meta = json.loads((out / "meta.json").read_text())
     assert meta["schema_version"] == "2"
-    assert meta["stages"] == ["equipment", "foundry", "chips", "cloud", "power"]
+    assert meta["stages"] == [
+        "eda", "equipment", "foundry", "packaging", "chips",
+        "networking", "grid", "power", "cloud",
+    ]
 
 
 def test_fixture_db_exports_fundamentals(tmp_path):

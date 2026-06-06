@@ -118,12 +118,74 @@ def test_node_cik_optional(tmp_path):
     assert nodes["cik"].isna().all() or (nodes["cik"] == "").all()
 
 
-def test_power_stage_nodes_and_edges_load():
+NEW_STAGE = """
+nodes:
+  - id: arista
+    name: Arista Networks
+    tickers: [ANET]
+    stage: networking
+    region: US
+edges: []
+"""
+
+
+def test_new_stages_validate(tmp_path):
+    p = tmp_path / "g.yml"
+    p.write_text(NEW_STAGE)
+    nodes, _ = load_graph(p)
+    assert nodes.loc[nodes["id"] == "arista", "stage"].iloc[0] == "networking"
+
+
+def test_seed_has_new_stage_nodes():
+    from config import SEED_PATH
+
+    nodes, _ = load_graph(SEED_PATH)
+    by_stage = nodes.groupby("stage")["id"].apply(set).to_dict()
+    assert by_stage.get("eda") == {"synopsys", "cadence"}
+    assert by_stage.get("packaging") == {"amkor"}
+    assert by_stage.get("networking") == {"arista", "marvell", "astera_labs"}
+    assert by_stage.get("grid") == {"ge_vernova", "quanta"}
+    assert len(nodes) == 29
+
+
+def test_power_edges_point_to_cloud_and_no_orphans():
     from config import SEED_PATH
 
     nodes, edges = load_graph(SEED_PATH)
-    power = nodes[nodes["stage"] == "power"]
-    assert set(power["id"]) >= {"vistra", "constellation", "vertiv", "dominion"}
-    cloud_ids = set(nodes[nodes["stage"] == "cloud"]["id"])
-    power_ids = set(power["id"])
-    assert ((edges["from_id"].isin(cloud_ids)) & (edges["to_id"].isin(power_ids))).any()
+    pairs = set(zip(edges["from_id"], edges["to_id"]))
+    # power edges now point utility -> cloud (corrected direction)
+    assert ("dominion", "microsoft") in pairs
+    assert ("vistra", "amazon") in pairs
+    assert ("constellation", "microsoft") in pairs
+    assert ("vertiv", "amazon") in pairs
+    # the old reversed edges are gone
+    assert ("microsoft", "dominion") not in pairs
+    assert ("amazon", "vistra") not in pairs
+    # orphans fixed
+    assert ("nvidia", "oracle") in pairs
+    assert ("nrg", "amazon") in pairs
+    assert ("eaton", "microsoft") in pairs
+    # no node is orphaned
+    linked = set(edges["from_id"]) | set(edges["to_id"])
+    assert set(nodes["id"]) <= linked
+
+
+def test_seed_has_new_supply_edges():
+    from config import SEED_PATH
+
+    _, edges = load_graph(SEED_PATH)
+    pairs = set(zip(edges["from_id"], edges["to_id"]))
+    assert ("synopsys", "nvidia") in pairs
+    assert ("cadence", "broadcom") in pairs
+    assert ("amkor", "nvidia") in pairs
+    assert ("broadcom", "arista") in pairs
+    assert ("arista", "microsoft") in pairs
+    assert ("marvell", "amazon") in pairs
+    assert ("astera_labs", "microsoft") in pairs
+    assert ("ge_vernova", "constellation") in pairs
+    assert ("quanta", "dominion") in pairs
+    # every new edge must carry a citation (evidence non-empty)
+    new_from = {"synopsys", "cadence", "amkor", "broadcom", "arista",
+                "marvell", "astera_labs", "ge_vernova", "quanta"}
+    cited = edges[edges["from_id"].isin(new_from)]
+    assert (cited["evidence"].str.len() > 0).all()
