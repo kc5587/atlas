@@ -26,3 +26,23 @@ def networking_capex_edges(nodes: pd.DataFrame, edges: pd.DataFrame) -> pd.DataF
         if stage.get(e.from_id) == NETWORKING_STAGE and stage.get(e.to_id) == CUSTOMER_STAGE:
             rows.append({"from_id": e.to_id, "to_id": e.from_id, "relationship": "supplies"})
     return pd.DataFrame(rows, columns=["from_id", "to_id", "relationship"])
+
+
+def networking_propagation(fundamentals: pd.DataFrame, nodes: pd.DataFrame,
+                           edges: pd.DataFrame, *, iters: int, seed: int) -> pd.DataFrame:
+    """H11: hyperscaler capex -> networking-supplier revenue (reuses H1 engine)."""
+    from analysis.fundamentals_leadlag import capex_revenue_edges
+
+    rev_edges = networking_capex_edges(nodes, edges)
+    return capex_revenue_edges(fundamentals, nodes, rev_edges, iters=iters, seed=seed)
+
+
+def networking_pricing(fundamentals: pd.DataFrame, returns: pd.DataFrame,
+                       factors: dict, nodes: pd.DataFrame, edges: pd.DataFrame,
+                       *, horizons, iters: int, seed: int) -> pd.DataFrame:
+    """H12: is the buildout priced into networking equity? (reuses H5 engine)."""
+    from analysis.capex_price import capex_price_edges
+
+    rev_edges = networking_capex_edges(nodes, edges)
+    return capex_price_edges(fundamentals, returns, factors, nodes, rev_edges,
+                             horizons=horizons, iters=iters, seed=seed)
