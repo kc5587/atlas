@@ -570,10 +570,16 @@ def run() -> None:  # pragma: no cover
         print(f"vol_termstructure: wrote {len(h7)} target x horizon rows")
 
     from config import (
+        CLOUD_MARGIN_NAMES,
         H4_HORIZON_MONTHS,
+        H9_LEAD_QUARTERS,
+        H10_HORIZON_MONTHS,
         H8_LEAD_QUARTERS,
         INDICATOR_PUB_LAG_MONTHS,
         LEADING_INDICATORS,
+        POWER_DEMAND_SERIES,
+        POWER_NAMES,
+        POWER_PRICE_SERIES,
         SEMIS_REVENUE_NAMES,
     )
 
@@ -613,6 +619,44 @@ def run() -> None:  # pragma: no cover
         con.execute("CREATE OR REPLACE TABLE macro_sector AS SELECT * FROM h4t")
         con.unregister("h4t")
         print(f"macro_sector: wrote {len(h4)} indicator x horizon rows")
+    if any(sid in present for sid in POWER_PRICE_SERIES) and len(fundamentals):
+        from analysis.power_margins import power_margins_table
+
+        h9 = power_margins_table(
+            macro,
+            fundamentals,
+            price_series=POWER_PRICE_SERIES,
+            names=CLOUD_MARGIN_NAMES,
+            leads=H9_LEAD_QUARTERS,
+            pub_lag=INDICATOR_PUB_LAG_MONTHS,
+            iters=BOOTSTRAP_ITERS,
+            seed=RANDOM_SEED,
+        )
+        con.register("h9t", h9)
+        con.execute("CREATE OR REPLACE TABLE power_margins AS SELECT * FROM h9t")
+        con.unregister("h9t")
+        print(f"power_margins: wrote {len(h9)} price rows")
+    present_names = set(returns["ticker"].unique()) if len(returns) else set()
+    if (
+        any(sid in present for sid in POWER_DEMAND_SERIES)
+        and any(name in present_names for name in POWER_NAMES)
+    ):
+        from analysis.power_demand import power_demand_table
+
+        h10 = power_demand_table(
+            macro,
+            returns,
+            demand_series=POWER_DEMAND_SERIES,
+            names=[name for name in POWER_NAMES if name in present_names],
+            horizons=H10_HORIZON_MONTHS,
+            pub_lag=INDICATOR_PUB_LAG_MONTHS,
+            iters=BOOTSTRAP_ITERS,
+            seed=RANDOM_SEED,
+        )
+        con.register("h10t", h10)
+        con.execute("CREATE OR REPLACE TABLE power_demand AS SELECT * FROM h10t")
+        con.unregister("h10t")
+        print(f"power_demand: wrote {len(h10)} (name x horizon) rows")
     con.close()
     print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
 
