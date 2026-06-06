@@ -555,6 +555,51 @@ def run() -> None:  # pragma: no cover
         con.execute("CREATE OR REPLACE TABLE vol_termstructure AS SELECT * FROM h7t")
         con.unregister("h7t")
         print(f"vol_termstructure: wrote {len(h7)} target x horizon rows")
+
+    from config import (
+        H4_HORIZON_MONTHS,
+        H8_LEAD_QUARTERS,
+        INDICATOR_PUB_LAG_MONTHS,
+        LEADING_INDICATORS,
+        SEMIS_REVENUE_NAMES,
+    )
+
+    present = set(macro["series_id"].unique()) if len(macro) else set()
+    indicators = tuple(sid for sid in LEADING_INDICATORS if sid in present)
+    if indicators and len(fundamentals):
+        from analysis.leading_indicators import leading_revenue_table
+
+        h8 = leading_revenue_table(
+            macro,
+            fundamentals,
+            indicators=indicators,
+            names=SEMIS_REVENUE_NAMES,
+            leads=H8_LEAD_QUARTERS,
+            pub_lag=INDICATOR_PUB_LAG_MONTHS,
+            iters=BOOTSTRAP_ITERS,
+            seed=RANDOM_SEED,
+        )
+        con.register("h8t", h8)
+        con.execute("CREATE OR REPLACE TABLE leading_revenue AS SELECT * FROM h8t")
+        con.unregister("h8t")
+        print(f"leading_revenue: wrote {len(h8)} indicator rows")
+    if indicators and "SOXX" in set(returns["ticker"].unique()):
+        from analysis.macro_sector import macro_sector_table
+
+        h4 = macro_sector_table(
+            macro,
+            returns,
+            indicators=indicators,
+            target="SOXX",
+            horizons=H4_HORIZON_MONTHS,
+            pub_lag=INDICATOR_PUB_LAG_MONTHS,
+            iters=BOOTSTRAP_ITERS,
+            seed=RANDOM_SEED,
+        )
+        con.register("h4t", h4)
+        con.execute("CREATE OR REPLACE TABLE macro_sector AS SELECT * FROM h4t")
+        con.unregister("h4t")
+        print(f"macro_sector: wrote {len(h4)} indicator x horizon rows")
     con.close()
     print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
 
