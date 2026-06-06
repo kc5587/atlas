@@ -116,3 +116,14 @@ def test_node_cik_optional(tmp_path):
     nodes, _ = load_graph(p)
     assert "cik" in nodes.columns
     assert nodes["cik"].isna().all() or (nodes["cik"] == "").all()
+
+
+def test_power_stage_nodes_and_edges_load():
+    from config import SEED_PATH
+
+    nodes, edges = load_graph(SEED_PATH)
+    power = nodes[nodes["stage"] == "power"]
+    assert set(power["id"]) >= {"vistra", "constellation", "vertiv", "dominion"}
+    cloud_ids = set(nodes[nodes["stage"] == "cloud"]["id"])
+    power_ids = set(power["id"])
+    assert ((edges["from_id"].isin(cloud_ids)) & (edges["to_id"].isin(power_ids))).any()

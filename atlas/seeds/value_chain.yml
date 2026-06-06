@@ -91,6 +91,37 @@ nodes:
     stage: cloud
     region: US
     cik: "0001375365"
+  # --- power / datacenter (Layer 3) ---
+  - id: vistra
+    name: Vistra
+    tickers: [VST]
+    stage: power
+    region: US
+  - id: nrg
+    name: NRG Energy
+    tickers: [NRG]
+    stage: power
+    region: US
+  - id: constellation
+    name: Constellation Energy
+    tickers: [CEG]
+    stage: power
+    region: US
+  - id: eaton
+    name: Eaton
+    tickers: [ETN]
+    stage: power
+    region: US
+  - id: vertiv
+    name: Vertiv
+    tickers: [VRT]
+    stage: power
+    region: US
+  - id: dominion
+    name: Dominion Energy
+    tickers: [D]
+    stage: power
+    region: US
 edges:
   # --- equipment -> foundry ---
   - from: asml
@@ -213,3 +244,20 @@ edges:
     note: in-house accelerator (TPU/Trainium) fabbed at TSMC
     evidence: "AMZN Trainium/Inferentia fabricated at TSMC"
     as_of: 2024-01-01
+  # --- cloud -> power / datacenter ---
+  - from: microsoft
+    to: dominion
+    relationship: supplies
+    as_of: "2026-06-06"
+  - from: amazon
+    to: vistra
+    relationship: supplies
+    as_of: "2026-06-06"
+  - from: microsoft
+    to: constellation
+    relationship: supplies
+    as_of: "2026-06-06"
+  - from: amazon
+    to: vertiv
+    relationship: supplies
+    as_of: "2026-06-06"
