@@ -118,6 +118,24 @@ def test_node_cik_optional(tmp_path):
     assert nodes["cik"].isna().all() or (nodes["cik"] == "").all()
 
 
+NEW_STAGE = """
+nodes:
+  - id: arista
+    name: Arista Networks
+    tickers: [ANET]
+    stage: networking
+    region: US
+edges: []
+"""
+
+
+def test_new_stages_validate(tmp_path):
+    p = tmp_path / "g.yml"
+    p.write_text(NEW_STAGE)
+    nodes, _ = load_graph(p)
+    assert nodes.loc[nodes["id"] == "arista", "stage"].iloc[0] == "networking"
+
+
 def test_power_stage_nodes_and_edges_load():
     from config import SEED_PATH
 

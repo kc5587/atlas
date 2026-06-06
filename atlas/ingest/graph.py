@@ -9,7 +9,10 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, field_validator
 
-Stage = Literal["equipment", "foundry", "chips", "cloud", "power"]
+Stage = Literal[
+    "eda", "equipment", "foundry", "packaging",
+    "chips", "networking", "grid", "power", "cloud",
+]
 
 
 class Node(BaseModel):
