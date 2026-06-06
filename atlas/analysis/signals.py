@@ -256,6 +256,54 @@ def h7_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h8_record(rows: pd.DataFrame) -> dict:
+    """H8: do chip-cycle leading indicators lead chip-maker revenue?"""
+    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
+    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
+                     & (~elig["contradicts_thesis"])]
+    suggestive = elig[(elig["q_value"] <= 0.25) & (elig["slope"] > 0)
+                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
+    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
+    if len(confirmed):
+        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
+    elif len(suggestive):
+        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
+    elif len(contradicting):
+        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
+    elif len(elig):
+        verdict, best = "null", elig.sort_values("q_value").iloc[0]
+    else:
+        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    interp = {
+        "confirmed": "the canary leads the fundamental (economic propagation)",
+        "suggestive": "weak lead",
+        "null": "no measurable lead over the sector's revenue",
+        "contradicts": "indicator moves opposite to revenue",
+    }[verdict]
+    n = int(best.get("n_obs")) if len(elig) else 0
+    return {
+        "id": "H8", "title": "Does the chip-cycle canary lead chip-maker revenue?",
+        "horizon": "1-2 quarters", "claim": "Leading indicators lead semis-sector revenue",
+        "mechanism": f"Physical chip cycle leads the fundamental -- {interp}",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "best indicator corr", "metric": "corr", "value": _num(best.get("corr"))},
+            {"stage": "best indicator slope", "metric": "slope", "value": _num(best.get("slope"))},
+            {"stage": "selection-aware q", "metric": "q", "value": _num(best.get("q_value"))},
+        ],
+        "stat": {"name": "slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
+        "caveats": [
+            "Target = cross-sectional median revenue YoY of 6 US semis filers (ASML/TSM excluded).",
+            "Korea exports are TOTAL, not semis-only; indicators publication-lagged (PIT). No walk-forward (small sample).",
+        ],
+        "chart": {"type": "leading_revenue", "ref": "h8"},
+        "detail_rows": elig[["indicator", "best_lead", "corr", "slope", "slope_lo",
+                             "slope_hi", "q_value", "n_obs"]].to_dict("records"),
+    }
+
+
 def h5_record(rows: pd.DataFrame) -> dict:
     elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
     n = int(len(elig))
@@ -353,4 +401,10 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h7 = con.execute('SELECT * FROM vol_termstructure').df()
         if len(h7):
             records.append(h7_record(h7))
+    has_h8 = con.execute("SELECT count(*) FROM information_schema.tables "
+                         "WHERE table_name='leading_revenue'").fetchone()[0] > 0
+    if has_h8:
+        h8 = con.execute('SELECT * FROM leading_revenue').df()
+        if len(h8):
+            records.append(h8_record(h8))
     return records

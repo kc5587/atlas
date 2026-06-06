@@ -131,6 +131,8 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(row=(0,))
             if "table_name='vol_termstructure'" in sql:
                 return Result(row=(0,))
+            if "table_name='leading_revenue'" in sql:
+                return Result(row=(0,))
             if "information_schema.tables" in sql:
                 return Result(row=(1,))
             if "fundamentals_leadlag" in sql:
@@ -219,6 +221,60 @@ def test_h2_confirmed_when_significant_positive_drift():
 
 def test_h2_null_when_insignificant():
     assert h2_record(_h2_row(slope=0.001, q=0.8))["verdict"] == "null"
+
+
+def test_h8_record_confirmed_and_null():
+    from analysis.signals import h8_record
+
+    confirmed = pd.DataFrame(
+        [
+            {
+                "indicator": "IPG3344S",
+                "best_lead": 1,
+                "corr": 0.5,
+                "slope": 0.8,
+                "slope_lo": 0.3,
+                "slope_hi": 1.2,
+                "p_selection": 0.001,
+                "q_value": 0.004,
+                "n_obs": 45,
+                "contradicts_thesis": False,
+            },
+            {
+                "indicator": "A34SNO",
+                "best_lead": 2,
+                "corr": 0.2,
+                "slope": 0.3,
+                "slope_lo": -0.1,
+                "slope_hi": 0.7,
+                "p_selection": 0.2,
+                "q_value": 0.2,
+                "n_obs": 45,
+                "contradicts_thesis": False,
+            },
+        ]
+    )
+    rec = h8_record(confirmed)
+    assert rec["id"] == "H8" and rec["verdict"] == "confirmed"
+    assert rec["chart"]["type"] == "leading_revenue"
+
+    nullish = pd.DataFrame(
+        [
+            {
+                "indicator": "IPG3344S",
+                "best_lead": 1,
+                "corr": 0.05,
+                "slope": 0.1,
+                "slope_lo": -0.2,
+                "slope_hi": 0.4,
+                "p_selection": 0.4,
+                "q_value": 0.6,
+                "n_obs": 45,
+                "contradicts_thesis": False,
+            },
+        ]
+    )
+    assert h8_record(nullish)["verdict"] == "null"
 
 
 def test_h6_record_confirmed_when_premium_and_info():
