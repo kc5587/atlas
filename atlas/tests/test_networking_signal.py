@@ -57,3 +57,50 @@ def test_networking_propagation_runs_on_reversed_edges():
     # one row per reversed networking edge that has fundamentals on both sides
     assert ("microsoft", "arista") in set(zip(out["left"], out["right"]))
     assert "slope" in out.columns and "q_value" in out.columns
+
+
+def test_stage_tickers_collects_tickers_for_a_stage():
+    from analysis.leadlag import stage_tickers
+
+    assert stage_tickers(NODES, "networking") == {"ANET", "MRVL"}
+    assert stage_tickers(NODES, "cloud") == {"MSFT", "META", "AMZN"}
+
+
+def test_core_fundamentals_drops_excluded_stage_tickers():
+    from analysis.leadlag import core_fundamentals
+
+    fund = pd.DataFrame({
+        "ticker": ["ANET", "MRVL", "MSFT", "NVDA"],
+        "period_end": pd.Timestamp("2024-01-01"),
+        "revenue": 1.0, "capex": 1.0, "gross_margin": 1.0,
+    })
+    cf = core_fundamentals(fund, NODES, exclude_stages=["networking"])
+    assert set(cf["ticker"]) == {"MSFT", "NVDA"}
+
+
+def test_h1_cycle_pool_is_invariant_to_networking_fundamentals():
+    """The core H1 driver must give identical results whether or not networking
+    suppliers are present in the raw fundamentals, once routed through
+    core_fundamentals. This is the regression guard for the cycle-pool leak."""
+    from analysis.fundamentals_leadlag import capex_revenue_edges
+    from analysis.leadlag import core_fundamentals
+
+    base = _fundamentals_fixture()  # MSFT, ANET, NVDA
+    # A core edge that does NOT touch networking: NVDA(capex) -> MSFT(revenue).
+    core_edges = pd.DataFrame([
+        {"from_id": "nvidia", "to_id": "microsoft", "relationship": "supplies"},
+    ])
+    # Add MSFT capex + NVDA capex so the edge is computable, and give ANET a wild
+    # revenue series that would distort the leave-one-out cycle factor if leaked.
+    base = base.copy()
+    base.loc[base["ticker"] == "NVDA", "capex"] = np.linspace(2.0, 9.0, 16)
+    base.loc[base["ticker"] == "MSFT", "revenue"] = np.linspace(20.0, 40.0, 16)
+    polluted = base.copy()
+    polluted.loc[polluted["ticker"] == "ANET", "revenue"] = np.linspace(1.0, 500.0, 16)
+
+    cf_clean = core_fundamentals(base, NODES, exclude_stages=["networking"])
+    cf_poll = core_fundamentals(polluted, NODES, exclude_stages=["networking"])
+    a = capex_revenue_edges(cf_clean, NODES, core_edges, iters=200, seed=0)
+    b = capex_revenue_edges(cf_poll, NODES, core_edges, iters=200, seed=0)
+    # Identical: networking revenue never enters the core cycle pool.
+    assert a["slope"].iloc[0] == b["slope"].iloc[0]
