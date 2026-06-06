@@ -157,3 +157,24 @@ def test_power_stage_nodes_and_edges_load():
     cloud_ids = set(nodes[nodes["stage"] == "cloud"]["id"])
     power_ids = set(power["id"])
     assert ((edges["from_id"].isin(cloud_ids)) & (edges["to_id"].isin(power_ids))).any()
+
+
+def test_seed_has_new_supply_edges():
+    from config import SEED_PATH
+
+    _, edges = load_graph(SEED_PATH)
+    pairs = set(zip(edges["from_id"], edges["to_id"]))
+    assert ("synopsys", "nvidia") in pairs
+    assert ("cadence", "broadcom") in pairs
+    assert ("amkor", "nvidia") in pairs
+    assert ("broadcom", "arista") in pairs
+    assert ("arista", "microsoft") in pairs
+    assert ("marvell", "amazon") in pairs
+    assert ("astera_labs", "microsoft") in pairs
+    assert ("ge_vernova", "constellation") in pairs
+    assert ("quanta", "dominion") in pairs
+    # every new edge must carry a citation (evidence non-empty)
+    new_from = {"synopsys", "cadence", "amkor", "broadcom", "arista",
+                "marvell", "astera_labs", "ge_vernova", "quanta"}
+    cited = edges[edges["from_id"].isin(new_from)]
+    assert (cited["evidence"].str.len() > 0).all()

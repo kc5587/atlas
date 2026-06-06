@@ -305,3 +305,128 @@ edges:
     to: vertiv
     relationship: supplies
     as_of: "2026-06-06"
+  # --- eda -> chips (design enablement) ---
+  - from: synopsys
+    to: nvidia
+    relationship: supplies
+    note: EDA tools and IP for advanced GPU design
+    evidence: "SNPS FY2024 10-K (EDA software to leading semiconductor designers)"
+    as_of: 2024-01-01
+  - from: synopsys
+    to: amd
+    relationship: supplies
+    note: EDA tools and IP for advanced CPU/GPU design
+    evidence: "SNPS FY2024 10-K"
+    as_of: 2024-01-01
+  - from: synopsys
+    to: broadcom
+    relationship: supplies
+    note: EDA tools and IP for custom ASIC design
+    evidence: "SNPS FY2024 10-K"
+    as_of: 2024-01-01
+  - from: cadence
+    to: nvidia
+    relationship: supplies
+    note: EDA tools and IP for advanced GPU design
+    evidence: "CDNS FY2024 10-K (EDA software to leading designers)"
+    as_of: 2024-01-01
+  - from: cadence
+    to: amd
+    relationship: supplies
+    note: EDA tools and IP for advanced CPU/GPU design
+    evidence: "CDNS FY2024 10-K"
+    as_of: 2024-01-01
+  - from: cadence
+    to: broadcom
+    relationship: supplies
+    note: EDA tools and IP for custom ASIC design
+    evidence: "CDNS FY2024 10-K"
+    as_of: 2024-01-01
+  # --- packaging -> chips (OSAT assembly/test) ---
+  - from: amkor
+    to: nvidia
+    relationship: supplies
+    note: Outsourced assembly and test (OSAT) for data-center GPUs
+    evidence: "AMKR FY2024 10-K customer concentration"
+    as_of: 2024-01-01
+  - from: amkor
+    to: amd
+    relationship: supplies
+    note: Outsourced assembly and test (OSAT) for data-center accelerators
+    evidence: "AMKR FY2024 10-K customer concentration"
+    as_of: 2024-01-01
+  # --- chips -> networking (merchant switch silicon) ---
+  - from: broadcom
+    to: arista
+    relationship: supplies
+    note: Merchant switch silicon (Tomahawk / Jericho) for data-center switches
+    evidence: "AVGO networking-silicon commentary; ANET FY2024 10-K platform sourcing"
+    as_of: 2024-01-01
+  # --- networking -> cloud (interconnect to hyperscalers) ---
+  - from: arista
+    to: microsoft
+    relationship: supplies
+    note: Data-center networking switches
+    evidence: "ANET FY2024 10-K (Microsoft customer concentration)"
+    as_of: 2024-01-01
+  - from: arista
+    to: meta
+    relationship: supplies
+    note: Data-center networking switches for AI clusters
+    evidence: "ANET FY2024 10-K (Meta customer concentration)"
+    as_of: 2024-01-01
+  - from: marvell
+    to: amazon
+    relationship: supplies
+    note: Custom AI silicon and interconnect for AWS
+    evidence: "MRVL FY2024 10-K (cloud custom-silicon concentration)"
+    as_of: 2024-01-01
+  - from: marvell
+    to: microsoft
+    relationship: supplies
+    note: Custom AI silicon and interconnect
+    evidence: "MRVL FY2024 10-K (cloud custom-silicon concentration)"
+    as_of: 2024-01-01
+  - from: astera_labs
+    to: microsoft
+    relationship: supplies
+    note: Connectivity / retimer silicon for AI servers
+    evidence: "ALAB FY2024 10-K (hyperscaler connectivity concentration)"
+    as_of: 2024-01-01
+  - from: astera_labs
+    to: amazon
+    relationship: supplies
+    note: Connectivity / retimer silicon for AI servers
+    evidence: "ALAB FY2024 10-K (hyperscaler connectivity concentration)"
+    as_of: 2024-01-01
+  # --- grid -> power (buildout equipment to utilities) ---
+  - from: ge_vernova
+    to: constellation
+    relationship: supplies
+    note: Gas turbines and grid equipment to power generators
+    evidence: "GEV FY2024 10-K (power generation & grid equipment)"
+    as_of: 2024-01-01
+  - from: ge_vernova
+    to: vistra
+    relationship: supplies
+    note: Gas turbines and grid equipment
+    evidence: "GEV FY2024 10-K"
+    as_of: 2024-01-01
+  - from: ge_vernova
+    to: dominion
+    relationship: supplies
+    note: Grid equipment to utility
+    evidence: "GEV FY2024 10-K"
+    as_of: 2024-01-01
+  - from: quanta
+    to: dominion
+    relationship: supplies
+    note: Grid / datacenter infrastructure construction services
+    evidence: "PWR FY2024 10-K (electric power infrastructure services)"
+    as_of: 2024-01-01
+  - from: quanta
+    to: constellation
+    relationship: supplies
+    note: Grid infrastructure construction services
+    evidence: "PWR FY2024 10-K"
+    as_of: 2024-01-01
