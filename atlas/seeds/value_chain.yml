@@ -288,23 +288,50 @@ edges:
     note: in-house accelerator (TPU/Trainium) fabbed at TSMC
     evidence: "AMZN Trainium/Inferentia fabricated at TSMC"
     as_of: 2024-01-01
-  # --- cloud -> power / datacenter ---
-  - from: microsoft
-    to: dominion
+  # --- power / grid -> cloud (utilities supply electricity to datacenters) ---
+  - from: dominion
+    to: microsoft
     relationship: supplies
+    note: Grid power to Microsoft data centers (Virginia)
+    evidence: "MSFT datacenter siting in Dominion service territory"
     as_of: "2026-06-06"
-  - from: amazon
-    to: vistra
+  - from: vistra
+    to: amazon
     relationship: supplies
+    note: Power offtake to AWS datacenter load
+    evidence: "VST hyperscaler power agreements FY2024"
     as_of: "2026-06-06"
-  - from: microsoft
-    to: constellation
+  - from: constellation
+    to: microsoft
     relationship: supplies
+    note: Nuclear power-purchase agreement to Microsoft
+    evidence: "CEG-MSFT nuclear PPA announcement 2024"
     as_of: "2026-06-06"
-  - from: amazon
-    to: vertiv
+  - from: vertiv
+    to: amazon
     relationship: supplies
+    note: Datacenter power and cooling equipment for AWS buildout
+    evidence: "VRT FY2024 10-K hyperscaler demand commentary"
     as_of: "2026-06-06"
+  # --- orphan fixes ---
+  - from: nvidia
+    to: oracle
+    relationship: supplies
+    note: Data-center GPUs to Oracle Cloud Infrastructure (OCI)
+    evidence: "ORCL OCI GPU capacity commentary FY2024"
+    as_of: 2024-01-01
+  - from: nrg
+    to: amazon
+    relationship: supplies
+    note: Power offtake to hyperscaler datacenter load
+    evidence: "NRG retail/wholesale power to large-load datacenters FY2024"
+    as_of: "2026-06-06"
+  - from: eaton
+    to: microsoft
+    relationship: supplies
+    note: Datacenter electrical distribution equipment
+    evidence: "ETN FY2024 10-K datacenter electrical demand"
+    as_of: 2024-01-01
   # --- eda -> chips (design enablement) ---
   - from: synopsys
     to: nvidia

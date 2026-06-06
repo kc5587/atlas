@@ -148,15 +148,26 @@ def test_seed_has_new_stage_nodes():
     assert len(nodes) == 29
 
 
-def test_power_stage_nodes_and_edges_load():
+def test_power_edges_point_to_cloud_and_no_orphans():
     from config import SEED_PATH
 
     nodes, edges = load_graph(SEED_PATH)
-    power = nodes[nodes["stage"] == "power"]
-    assert set(power["id"]) >= {"vistra", "constellation", "vertiv", "dominion"}
-    cloud_ids = set(nodes[nodes["stage"] == "cloud"]["id"])
-    power_ids = set(power["id"])
-    assert ((edges["from_id"].isin(cloud_ids)) & (edges["to_id"].isin(power_ids))).any()
+    pairs = set(zip(edges["from_id"], edges["to_id"]))
+    # power edges now point utility -> cloud (corrected direction)
+    assert ("dominion", "microsoft") in pairs
+    assert ("vistra", "amazon") in pairs
+    assert ("constellation", "microsoft") in pairs
+    assert ("vertiv", "amazon") in pairs
+    # the old reversed edges are gone
+    assert ("microsoft", "dominion") not in pairs
+    assert ("amazon", "vistra") not in pairs
+    # orphans fixed
+    assert ("nvidia", "oracle") in pairs
+    assert ("nrg", "amazon") in pairs
+    assert ("eaton", "microsoft") in pairs
+    # no node is orphaned
+    linked = set(edges["from_id"]) | set(edges["to_id"])
+    assert set(nodes["id"]) <= linked
 
 
 def test_seed_has_new_supply_edges():
