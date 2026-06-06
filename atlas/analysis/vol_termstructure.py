@@ -31,7 +31,7 @@ def aligned_forward(
     xs, ys = [], []
     for i, _ in enumerate(s.index):
         window = rvals[i + 1: i + 1 + horizon]
-        if len(window) < max(5, horizon // 2):
+        if len(window) < horizon:
             continue
         xs.append(float(s.iloc[i]))
         ys.append(float(np.sum(window)))

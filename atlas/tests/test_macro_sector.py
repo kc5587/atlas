@@ -55,6 +55,8 @@ def test_macro_sector_table_shapes_and_fdr():
     )
 
     assert len(out) == 2 * 3
+    assert out["n_obs"].min() > 100
+    assert out["q_value"].notna().all()
     for col in (
         "indicator",
         "horizon",

@@ -27,6 +27,19 @@ def test_aligned_forward_returns_planted_relationship():
     assert np.corrcoef(x, y)[0, 1] > 0
 
 
+def test_aligned_forward_supports_short_monthly_horizon():
+    from analysis.vol_termstructure import aligned_forward
+
+    idx = pd.date_range("2020-01-01", periods=8, freq="MS")
+    slope = pd.Series(np.arange(8, dtype=float), index=idx)
+    log_ret = pd.Series(np.arange(10, 18, dtype=float), index=idx)
+
+    x, y = aligned_forward(slope, log_ret, horizon=1)
+
+    assert x.tolist() == list(range(7))
+    assert y.tolist() == list(range(11, 18))
+
+
 def test_selection_pvalue_small_when_signal_strong():
     from analysis.vol_termstructure import selection_pvalue_one_series
 
