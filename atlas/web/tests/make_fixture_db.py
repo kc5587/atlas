@@ -37,12 +37,16 @@ EDGES = [
     ("microsoft", "nvidia", "supplies", "in-house silicon", "", "2024-01-01"),
 ]
 
-# A couple of lead/lag rows; note the quoted "left"/"right" reserved words.
+# A couple of hardened lead/lag rows; note the quoted "left"/"right" reserved words.
 LEADLAG = [
-    ("edge", "asml", "tsmc", 5, 0.6, 0.001, 0.02, 300, True),
-    ("edge", "tsmc", "nvidia", 3, 0.45, 0.01, 0.04, 300, True),
-    ("fund_capex_rev", "nvidia", "microsoft", 1, 0.55, 0.01, 0.04, 12, False),
-    ("fund_capex_price", "nvidia", "nvidia", 1, 0.40, 0.03, 0.08, 12, False),
+    ("edge", "asml", "tsmc", "M1_market", 0.60, 0.60, 0.20, 5, 0.60, 0.001, 0.02,
+     0.001, 0.80, False, 300, True),
+    ("edge", "asml", "tsmc", "M2_market_sector", 0.60, 0.45, 0.08, 5, 0.45, 0.01,
+     0.04, 0.01, 0.70, False, 300, True),
+    ("fund_capex_rev", "nvidia", "microsoft", None, None, None, None, 1, 0.55, 0.01,
+     0.04, None, None, None, 12, False),
+    ("fund_capex_price", "nvidia", "nvidia", None, None, None, None, 1, 0.40, 0.03,
+     0.08, None, None, None, 12, False),
 ]
 
 FUNDAMENTALS = [
@@ -78,11 +82,14 @@ def build(path: Path) -> None:
         con.execute(
             "CREATE TABLE leadlag("
             'pair_type VARCHAR, "left" VARCHAR, "right" VARCHAR, '
-            "lag INT, corr DOUBLE, p_value DOUBLE, q_value DOUBLE, "
-            "n_eff INT, stable BOOLEAN)"
+            "factor_model VARCHAR, corr_raw DOUBLE, corr_resid DOUBLE, "
+            "corr_contemporaneous DOUBLE, lag INT, corr DOUBLE, p_value DOUBLE, "
+            "q_value DOUBLE, p_selection DOUBLE, oos_sign_rate DOUBLE, "
+            "contradicts_thesis BOOLEAN, n_eff INT, stable BOOLEAN)"
         )
         con.executemany(
-            "INSERT INTO leadlag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", LEADLAG
+            "INSERT INTO leadlag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            LEADLAG,
         )
 
         # ~400 daily returns rows for one ticker.

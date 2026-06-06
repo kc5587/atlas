@@ -17,6 +17,7 @@
     { key: "foundry", label: "FOUNDRY" },
     { key: "chips", label: "CHIPS" },
     { key: "cloud", label: "CLOUD" },
+    { key: "power", label: "POWER" },
   ];
   const HEADER_Y = 22;
   // Reserve left space in STORY mode so the leftmost (equipment) column clears
@@ -168,7 +169,13 @@
   });
 
   function stageColor(s: string) {
-    return { equipment: "#6c8ebf", foundry: "#9673a6", chips: "#82b366", cloud: "#d79b00" }[s] ?? "#888";
+    return {
+      equipment: "#6c8ebf",
+      foundry: "#9673a6",
+      chips: "#82b366",
+      cloud: "#d79b00",
+      power: "#b5563a",
+    }[s] ?? "#888";
   }
 </script>
 
@@ -179,6 +186,7 @@
     <span><i style="background:#9673a6"></i>Foundry</span>
     <span><i style="background:#82b366"></i>Chips</span>
     <span><i style="background:#d79b00"></i>Cloud</span>
+    <span><i style="background:#b5563a"></i>Power</span>
     <span class="sep"><i class="solid"></i>forward</span>
     <span><i class="dashed"></i>back/in-house</span>
   </div>

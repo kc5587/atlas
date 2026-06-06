@@ -9,11 +9,13 @@ const g: Graph = {
     { id: "tsmc", name: "TSMC", tickers: ["TSM"], stage: "foundry", region: "TW", criticality: 2 },
     { id: "nvidia", name: "NVIDIA", tickers: ["NVDA"], stage: "chips", region: "US", criticality: 3 },
     { id: "msft", name: "Microsoft", tickers: ["MSFT"], stage: "cloud", region: "US", criticality: 2 },
+    { id: "vistra", name: "Vistra", tickers: ["VST"], stage: "power", region: "US", criticality: 1 },
   ],
   edges: [
     { from_id: "asml", to_id: "tsmc", relationship: "supplies", note: "", evidence: "", as_of: "" },
     { from_id: "tsmc", to_id: "nvidia", relationship: "supplies", note: "", evidence: "", as_of: "" },
     { from_id: "nvidia", to_id: "msft", relationship: "supplies", note: "", evidence: "", as_of: "" },
+    { from_id: "msft", to_id: "vistra", relationship: "supplies", note: "", evidence: "", as_of: "" },
     // back-edge: cloud builds its own silicon -> chips
     { from_id: "msft", to_id: "nvidia", relationship: "supplies", note: "in-house", evidence: "", as_of: "" },
   ],
@@ -26,6 +28,7 @@ describe("computeLayout", () => {
     expect(by["asml"]).toBeLessThan(by["tsmc"]);
     expect(by["tsmc"]).toBeLessThan(by["nvidia"]);
     expect(by["nvidia"]).toBeLessThan(by["msft"]);
+    expect(by["msft"]).toBeLessThan(by["vistra"]);
   });
 
   it("gives every node a finite position", () => {

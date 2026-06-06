@@ -99,6 +99,28 @@
       {/each}
     </ul>
   {/if}
+  {#if signal.chart.type === "power_margins"}
+    <p class="legend">Δgross-margin on −(electricity price YoY); slope &gt; 0 = compression</p>
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.indicator}</span>
+          <b>compression {Number(r.slope).toFixed(3)}</b>
+          <span class="ci">[{Number(r.slope_lo).toFixed(3)}, {Number(r.slope_hi).toFixed(3)}]</span>
+          <span class="lag">lead {r.best_lead}Q · q={Number(r.q_value).toFixed(2)} · n={r.n_obs}</span></li>
+      {/each}
+    </ul>
+  {/if}
+  {#if signal.chart.type === "power_demand"}
+    <p class="legend">Electricity demand YoY → forward power-name return (monthly walk-forward, FDR)</p>
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.name} · {r.horizon}m</span>
+          <b>slope {Number(r.slope).toFixed(2)}</b>
+          <span class="ci">[{Number(r.slope_lo).toFixed(2)}, {Number(r.slope_hi).toFixed(2)}]</span>
+          <span class="lag">q={Number(r.q_value).toFixed(2)} · sign {Number(r.oos_sign_rate).toFixed(2)}</span></li>
+      {/each}
+    </ul>
+  {/if}
   {#each signal.caveats as c}<p class="caveat">⚠ {c}</p>{/each}
 </article>
 

@@ -129,7 +129,7 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
     _write_json(out_dir / "signals.json", signals, default=str)
 
     tickers = sorted({t for n in nodes for t in n["tickers"]})
-    stages = ["equipment", "foundry", "chips", "cloud"]
+    stages = ["equipment", "foundry", "chips", "cloud", "power"]
     meta = {
         "generated_at": con.execute("SELECT now()").fetchone()[0].isoformat(),
         "schema_version": SCHEMA_VERSION, "tickers": tickers, "stages": stages,

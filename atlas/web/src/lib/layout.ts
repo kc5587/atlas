@@ -1,7 +1,7 @@
 // src/lib/layout.ts
 import type { Edge, Graph, Node, Stage } from "./types";
 
-const STAGE_ORDER: Stage[] = ["equipment", "foundry", "chips", "cloud"];
+const STAGE_ORDER: Stage[] = ["equipment", "foundry", "chips", "cloud", "power"];
 
 export interface PositionedNode extends Node { x: number; y: number; col: number; }
 export interface RoutedEdge extends Edge { isBack: boolean; }
