@@ -77,6 +77,28 @@
       {/each}
     </ul>
   {/if}
+  {#if signal.chart.type === "leading_revenue"}
+    <p class="legend">Indicator YoY → semis-sector revenue YoY (best lead, FDR-corrected)</p>
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.indicator}</span>
+          <b>slope {Number(r.slope).toFixed(2)}</b>
+          <span class="ci">[{Number(r.slope_lo).toFixed(2)}, {Number(r.slope_hi).toFixed(2)}]</span>
+          <span class="lag">lead {r.best_lead}Q · q={Number(r.q_value).toFixed(2)} · n={r.n_obs}</span></li>
+      {/each}
+    </ul>
+  {/if}
+  {#if signal.chart.type === "macro_sector"}
+    <p class="legend">Indicator YoY → forward SOXX return (monthly walk-forward, FDR)</p>
+    <ul class="edges">
+      {#each signal.detail_rows as r}
+        <li><span>{r.indicator} · {r.horizon}m</span>
+          <b>slope {Number(r.slope).toFixed(2)}</b>
+          <span class="ci">[{Number(r.slope_lo).toFixed(2)}, {Number(r.slope_hi).toFixed(2)}]</span>
+          <span class="lag">q={Number(r.q_value).toFixed(2)} · sign {Number(r.oos_sign_rate).toFixed(2)}</span></li>
+      {/each}
+    </ul>
+  {/if}
   {#each signal.caveats as c}<p class="caveat">⚠ {c}</p>{/each}
 </article>
 
