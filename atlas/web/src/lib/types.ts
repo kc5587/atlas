@@ -1,7 +1,10 @@
 // src/lib/types.ts
 import { z } from "zod";
 
-export const StageZ = z.enum(["equipment", "foundry", "chips", "cloud", "power"]);
+export const StageZ = z.enum([
+  "eda", "equipment", "foundry", "packaging",
+  "chips", "networking", "grid", "power", "cloud",
+]);
 export const NodeZ = z.object({
   id: z.string(), name: z.string(), tickers: z.array(z.string()),
   stage: StageZ, region: z.string(), cik: z.string().nullable().optional(),

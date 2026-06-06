@@ -38,6 +38,14 @@ describe("data parsing", () => {
     expect(ll[0].confirmed).toBe(true);
   });
 
+  it("parses the new explore-only stages", () => {
+    const g = parseGraph({
+      nodes: [{ id: "arista", name: "Arista", tickers: ["ANET"], stage: "networking", region: "US", criticality: 2 }],
+      edges: [],
+    });
+    expect(g.nodes[0].stage).toBe("networking");
+  });
+
   it("parses legacy lead/lag rows with null hardening fields", () => {
     const ll = parseLeadLag([
       { pair_type: "macro", left: "nvidia", right: "DFF", lag: 2,
