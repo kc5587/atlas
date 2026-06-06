@@ -15,7 +15,7 @@ models:
       - name: stage
         tests:
           - accepted_values:
-              values: [equipment, foundry, chips, cloud]
+              values: [equipment, foundry, chips, cloud, power]
   - name: fundamentals_quarterly
     columns:
       - name: ticker
