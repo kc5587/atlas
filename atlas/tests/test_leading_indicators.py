@@ -48,3 +48,23 @@ def test_sector_revenue_yoy_median():
 
     assert abs(agg.dropna().iloc[0] - np.log(1.10 ** 4)) < 1e-6
     assert isinstance(agg.index, pd.PeriodIndex)
+
+
+def test_indicator_revenue_lead_detects_planted_lead():
+    from analysis.leading_indicators import indicator_revenue_lead
+
+    rng = np.random.default_rng(0)
+    q = pd.period_range("2008Q1", periods=60, freq="Q")
+    ind = pd.Series(rng.normal(0, 0.05, 60), index=q)
+    rev = pd.Series(
+        0.8 * ind.shift(1).fillna(0).to_numpy() + rng.normal(0, 0.01, 60),
+        index=q,
+    )
+
+    out = indicator_revenue_lead(ind, rev, leads=(1, 2), iters=300, seed=1)
+
+    assert out["best_lead"] == 1
+    assert out["slope"] > 0.5
+    assert out["p_selection"] < 0.05
+    assert out["slope_lo"] > 0
+    assert out["n_obs"] >= 40
