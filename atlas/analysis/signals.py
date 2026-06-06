@@ -222,9 +222,9 @@ def h7_record(rows: pd.DataFrame) -> dict:
     else:
         verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
     interp = {
-        "confirmed": "harvestable timing edge (not priced in)",
-        "suggestive": "weak timing signal",
-        "null": "priced in / no reliable timing",
+        "confirmed": "a compensated volatility-risk premium, not a free edge",
+        "suggestive": "weak, possibly a risk premium",
+        "null": "no reliable timing signal",
         "contradicts": "term structure times returns the wrong way",
     }[verdict]
     n = int(best.get("n_obs")) if len(elig) else 0
@@ -233,7 +233,8 @@ def h7_record(rows: pd.DataFrame) -> dict:
         "title": "Does the vol term-structure slope time forward sector returns?",
         "horizon": "1-3 months",
         "claim": "VIX/VIX3M backwardation predicts positive forward sector returns",
-        "mechanism": f"Risk-appetite mean reversion -- verdict: {interp}",
+        "mechanism": f"VIX/VIX3M is a volatility-risk-premium proxy: backwardation pays "
+                     f"for bearing stress, consistent with efficient markets -- {interp}",
         "verdict": verdict,
         "evidence_chain": [
             {"stage": "best-cell corr", "metric": "corr", "value": _num(best.get("corr"))},
@@ -246,7 +247,8 @@ def h7_record(rows: pd.DataFrame) -> dict:
                  "q_value": _num(best.get("q_value")), "n": n},
         "caveats": [
             "Predictor is S&P term structure (VXN has no free term structure); targets raw forward returns.",
-            "9-cell family (3 targets x 3 horizons), BH-FDR corrected; observational, no costs.",
+            "All 9 cells (3 targets x 3 horizons) are one correlated effect, not independent findings; BH-FDR over the family.",
+            "A RISK premium, not alpha: it pays off by bearing volatility/crash risk. Observational; no costs or tail-risk modeled.",
         ],
         "chart": {"type": "termstructure_timing", "ref": "h7"},
         "detail_rows": elig[["target", "horizon", "corr", "slope", "slope_lo", "slope_hi",

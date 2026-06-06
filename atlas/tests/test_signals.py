@@ -278,3 +278,21 @@ def test_h7_record_confirmed_when_cell_passes():
          "n_obs": 2000, "contradicts_thesis": False},
     ])
     assert h7_record(rows)["verdict"] == "confirmed"
+
+
+def test_h7_confirmed_framed_as_risk_premium_not_alpha():
+    # Honesty guard: a confirmed H7 must be framed as a compensated risk premium,
+    # never as 'free alpha / not priced in' (it is a volatility-risk-premium proxy).
+    from analysis.signals import h7_record
+
+    rows = pd.DataFrame([
+        {"target": "SPY", "horizon": 63, "corr": 0.25, "slope": 0.21, "slope_lo": 0.16,
+         "slope_hi": 0.27, "p_selection": 0.001, "q_value": 0.003, "oos_sign_rate": 1.0,
+         "n_obs": 4099, "contradicts_thesis": False},
+    ])
+    rec = h7_record(rows)
+    assert rec["verdict"] == "confirmed"
+    mech = rec["mechanism"].lower()
+    assert "risk" in mech and "premium" in mech
+    assert "harvestable" not in mech and "not priced in" not in mech
+    assert any("risk premium" in c.lower() for c in rec["caveats"])
