@@ -18,6 +18,7 @@ from analysis.significance import auto_block_length, circular_rotate
 from config import (
     BOOTSTRAP_ITERS,
     FACTOR_TICKERS,
+    H15_MIN_MONTHS,
     H15_OOS_STEP_MONTHS,
     H15_OOS_TEST_MONTHS,
     RANDOM_SEED,
@@ -39,8 +40,30 @@ def _sector_etf(stage: str) -> str | None:
     return FACTOR_TICKERS.get(STAGE_SECTOR.get(stage, ""))
 
 
-def residual_monthly_returns(monthly: pd.DataFrame, nodes: pd.DataFrame) -> pd.DataFrame:
-    """M2-residual monthly return per node ticker, with betas fit on full sample."""
+def _complete_train_count(
+    asset: pd.Series,
+    factors: dict[str, pd.Series],
+    *,
+    sector: str | None,
+    train_index: pd.DatetimeIndex,
+) -> int:
+    cols = [asset.rename("asset"), factors["SPY"].rename("SPY")]
+    if sector is not None:
+        cols.append(factors[sector].rename("SEC"))
+    return int(pd.concat(cols, axis=1, join="inner").loc[train_index].dropna().shape[0])
+
+
+def residual_monthly_returns(
+    monthly: pd.DataFrame,
+    nodes: pd.DataFrame,
+    *,
+    min_train: int = H15_MIN_MONTHS,
+) -> pd.DataFrame:
+    """Walk-forward M2-residual monthly return per node ticker.
+
+    For each month t, M2 betas are fit using only months strictly before t.
+    Months with fewer than min_train complete training observations remain NaN.
+    """
     factors = {etf: monthly[etf] for etf in FACTOR_ETFS if etf in monthly.columns}
     stage_of = {}
     for row in nodes.itertuples():
@@ -53,13 +76,26 @@ def residual_monthly_returns(monthly: pd.DataFrame, nodes: pd.DataFrame) -> pd.D
             continue
         sector = _sector_etf(stage_of[ticker])
         sector = sector if sector and sector in factors else None
-        out[ticker] = residual_for_spec(
-            monthly[ticker],
-            factors,
-            sector=sector,
-            spec="M2",
-            train_index=monthly.index,
-        )
+        residual_values = {}
+        for month in monthly.index:
+            train_index = pd.DatetimeIndex(monthly.index[monthly.index < month])
+            if _complete_train_count(
+                monthly[ticker],
+                factors,
+                sector=sector,
+                train_index=train_index,
+            ) < min_train:
+                continue
+            month_residual = residual_for_spec(
+                monthly[ticker],
+                factors,
+                sector=sector,
+                spec="M2",
+                train_index=train_index,
+            )
+            if month in month_residual.index:
+                residual_values[month] = float(month_residual.loc[month])
+        out[ticker] = pd.Series(residual_values, index=monthly.index, dtype=float)
     return pd.DataFrame(out)
 
 
