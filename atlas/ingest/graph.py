@@ -45,7 +45,12 @@ def load_graph(yaml_path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     Raises ValueError on duplicate node ids or edges referencing unknown nodes.
     """
-    data = yaml.safe_load(Path(yaml_path).read_text())
+    path = Path(yaml_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"graph YAML not found: {path}")
+    data = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"graph YAML must be a mapping, got {type(data).__name__}")
     raw_nodes = data.get("nodes", []) or []
     raw_edges = data.get("edges", []) or []
 

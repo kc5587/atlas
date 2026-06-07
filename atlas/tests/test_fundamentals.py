@@ -1,8 +1,16 @@
 import duckdb
 import pandas as pd
+import pytest
 
 from ingest import fundamentals
-from ingest.fundamentals import normalize_concept, pick_first_filed, stitch_concepts
+from ingest.fundamentals import (
+    _strict_mode,
+    _validate_cik,
+    _validate_tag,
+    normalize_concept,
+    pick_first_filed,
+    stitch_concepts,
+)
 
 
 def _tag_json(rows):
@@ -140,3 +148,24 @@ def test_run_skips_failed_metric_and_writes_success(tmp_path, monkeypatch):
     assert out.exists()
     written = pd.read_parquet(out)
     assert set(written["metric"]) == {"revenue"}
+
+
+def test_validate_cik_accepts_10_digits_and_rejects_others():
+    assert _validate_cik("0000320193") == "0000320193"
+    for bad in ("320193", "00003201930", "abc1234567", "../../etc/passwd"):
+        with pytest.raises(ValueError):
+            _validate_cik(bad)
+
+
+def test_validate_tag_rejects_path_altering_chars():
+    assert _validate_tag("Revenues") == "Revenues"
+    for bad in ("Revenues.json", "../Assets", "a/b", "tag?x=1", ""):
+        with pytest.raises(ValueError):
+            _validate_tag(bad)
+
+
+def test_strict_mode_reads_env(monkeypatch):
+    monkeypatch.delenv("ATLAS_INGEST_STRICT", raising=False)
+    assert _strict_mode() is False
+    monkeypatch.setenv("ATLAS_INGEST_STRICT", "1")
+    assert _strict_mode() is True
