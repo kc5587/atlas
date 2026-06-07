@@ -626,3 +626,37 @@ def test_h10_record_null_and_confirmed():
          "n_obs": 120, "contradicts_thesis": False},
     ])
     assert h10_record(conf)["verdict"] == "confirmed"
+
+
+def test_tiered_verdict_require_oos_gates_on_oos_floor():
+    from analysis.signals import _tiered_verdict
+    # q passes FDR, slope>0, not contradicting, but OOS sign-rate below the 0.6 floor.
+    row = pd.DataFrame([
+        {"n_obs": 100, "slope": 0.5, "slope_lo": 0.1, "slope_hi": 0.9,
+         "q_value": 0.01, "oos_sign_rate": 0.4, "p_selection": 0.001,
+         "contradicts_thesis": False},
+    ])
+    # OOS ignored -> confirmed; OOS required -> floor not met, falls to CI-based suggestive.
+    assert _tiered_verdict(row, require_oos=False)[0] == "confirmed"
+    assert _tiered_verdict(row, require_oos=True)[0] == "suggestive"
+
+
+def test_tiered_verdict_propagation_suggestive_is_ci_based_not_q():
+    from analysis.signals import _tiered_verdict_propagation
+    # q FAILS FDR (0.4) but slope CI is strictly positive -> suggestive (not null):
+    # the propagation family qualifies "suggestive" on the CI, not the q-value.
+    row = pd.DataFrame([
+        {"n_quarters": 8, "slope": 0.5, "slope_lo": 0.1, "slope_hi": 0.9,
+         "q_value": 0.4, "p_selection": 0.2, "contradicts_thesis": False},
+    ])
+    assert _tiered_verdict_propagation(row)[0] == "suggestive"
+
+
+def test_slope_stat_shape_and_nan_safety():
+    from analysis.signals import _slope_stat
+    best = pd.Series({"slope": 0.1234, "slope_lo": 0.01, "slope_hi": 0.5, "q_value": 0.03})
+    assert _slope_stat("slope", best, 42) == {
+        "name": "slope", "value": 0.123, "ci": [0.01, 0.5], "q_value": 0.03, "n": 42}
+    # Missing fields route through _num -> 0.0 (no NaN/None leak into a required card field).
+    empty = _slope_stat("slope", pd.Series(dtype=float), 0)
+    assert empty["value"] == 0.0 and empty["ci"] == [0.0, 0.0] and empty["q_value"] == 0.0

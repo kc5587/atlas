@@ -36,6 +36,8 @@ MACRO_NMIN = 36
 BOOTSTRAP_ITERS = 1000
 BOOTSTRAP_BLOCK = 20
 FDR_ALPHA = 0.10
+OOS_SIGN_FLOOR = 0.6  # min OOS sign-retention for a "confirmed" timing verdict
+SUGGESTIVE_Q = 0.25  # relaxed q threshold for the weaker "suggestive" tier
 RANDOM_SEED = 7
 
 # Layer 2: SEC EDGAR fundamentals.

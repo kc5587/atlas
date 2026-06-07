@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-FDR_ALPHA = 0.10
-OOS_SIGN_FLOOR = 0.6
+from config import FDR_ALPHA, OOS_SIGN_FLOOR, SUGGESTIVE_Q
 
 
 def h0_record(leadlag_edges: pd.DataFrame) -> dict:
@@ -46,30 +45,80 @@ def _num(x, ndigits: int = 3) -> float:
     return 0.0 if x is None or pd.isna(x) else round(float(x), ndigits)
 
 
-def h1_record(rows: pd.DataFrame) -> dict:
-    # Eligible = enough quarters AND a finite slope (short/degenerate edges excluded).
+def _empty_best(rows: pd.DataFrame) -> pd.Series:
+    """Fallback 'best' row when no eligible edges exist (keeps best.get(...) safe)."""
+    return rows.iloc[0] if len(rows) else pd.Series(dtype=float)
+
+
+def _slope_stat(name: str, best: pd.Series, n: int) -> dict:
+    """The shared slope/CI/q stat block used by most quantitative records."""
+    return {"name": name, "value": _num(best.get("slope")),
+            "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+            "q_value": _num(best.get("q_value")), "n": n}
+
+
+def _tiered_verdict(rows: pd.DataFrame, *, require_oos: bool) -> tuple[str, pd.Series, pd.DataFrame]:
+    """Shared verdict tiering for the forward-return / lead family (h4,h5,h7,h8,h9,h10).
+
+    elig = positive n_obs with a finite slope. Tiers:
+      confirmed:   q<=FDR_ALPHA & slope>0 & ~contradicts_thesis [& oos>=OOS_SIGN_FLOOR]
+      suggestive:  q<=SUGGESTIVE_Q & slope>0 & slope_lo>0 & ~contradicts_thesis
+      contradicts: q<=FDR_ALPHA & slope<0  (a SIGNIFICANT reversal, not near-zero noise)
+    Returns (verdict, best_row, elig). `require_oos` adds the OOS floor to confirmed.
+    """
+    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
+    conf_mask = ((elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
+                 & (~elig["contradicts_thesis"]))
+    if require_oos:
+        conf_mask = conf_mask & (elig["oos_sign_rate"] >= OOS_SIGN_FLOOR)
+    confirmed = elig[conf_mask]
+    suggestive = elig[(elig["q_value"] <= SUGGESTIVE_Q) & (elig["slope"] > 0)
+                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
+    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
+    if len(confirmed):
+        return "confirmed", confirmed.sort_values("q_value").iloc[0], elig
+    if len(suggestive):
+        return "suggestive", suggestive.sort_values("p_selection").iloc[0], elig
+    if len(contradicting):
+        return "contradicts", contradicting.sort_values("q_value").iloc[0], elig
+    if len(elig):
+        return "null", elig.sort_values("q_value").iloc[0], elig
+    return "null", _empty_best(rows), elig
+
+
+def _tiered_verdict_propagation(rows: pd.DataFrame) -> tuple[str, pd.Series, pd.DataFrame]:
+    """Shared verdict tiering for the quarterly capex->revenue propagation family (h1,h11).
+
+    Distinct from _tiered_verdict: elig is keyed on n_quarters, "suggestive" is CI-based
+    (the slope CI, not q, qualifies it), "contradicts" is the contradicts_thesis FLAG, and
+    the contradicts/null fallbacks take the first eligible row (unsorted).
+    Returns (verdict, best_row, elig).
+    """
     elig = rows[(rows["n_quarters"] > 0) & rows["slope"].notna()]
-    n = int(len(elig))
-    # Confirmation gate = the SELECTION-AWARE q (which already accounts for the
-    # 1–4Q lag search) + expected sign + not contradicting. The slope CI is
-    # conditional on the selected lag, so it does NOT gate "confirmed" — it only
-    # qualifies the weaker "suggestive" tier and serves as a descriptive effect size.
     confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
                      & (~elig["contradicts_thesis"])]
     suggestive = elig[(elig["slope"] > 0) & (elig["slope_lo"] > 0)
                       & (~elig["contradicts_thesis"])]
     contradicting = elig[elig["contradicts_thesis"]]
     if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.iloc[0]
-    elif len(elig):
-        verdict, best = "null", elig.iloc[0]
-    else:
-        verdict = "null"
-        best = rows.iloc[0] if len(rows) else pd.Series(dtype=float)
+        return "confirmed", confirmed.sort_values("q_value").iloc[0], elig
+    if len(suggestive):
+        return "suggestive", suggestive.sort_values("p_selection").iloc[0], elig
+    if len(contradicting):
+        return "contradicts", contradicting.iloc[0], elig
+    if len(elig):
+        return "null", elig.iloc[0], elig
+    return "null", _empty_best(rows), elig
+
+
+def h1_record(rows: pd.DataFrame) -> dict:
+    # Eligible = enough quarters AND a finite slope (short/degenerate edges excluded).
+    # Confirmation gate = the SELECTION-AWARE q (which already accounts for the
+    # 1–4Q lag search) + expected sign + not contradicting. The slope CI is
+    # conditional on the selected lag, so it does NOT gate "confirmed" — it only
+    # qualifies the weaker "suggestive" tier and serves as a descriptive effect size.
+    verdict, best, elig = _tiered_verdict_propagation(rows)
+    n = int(len(elig))
     return {
         "id": "H1", "title": "Capex → downstream revenue", "horizon": "quarterly",
         "claim": "Upstream capex leads downstream revenue by 1–4 quarters",
@@ -81,9 +130,7 @@ def h1_record(rows: pd.DataFrame) -> dict:
             {"stage": "best edge corr", "metric": "corr", "value": _num(best.get("corr"))},
             {"stage": "best edge slope", "metric": "slope", "value": _num(best.get("slope"))},
         ],
-        "stat": {"name": "slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("slope", best, n),
         "caveats": [f"~{int(elig['n_quarters'].median()) if len(elig) else 0} quarters/edge → CIs, no walk-forward",
                     "Slope CI is conditional on the selected lag; confirmation uses the selection-aware q",
                     "ASML/TSM excluded (no SEC fundamentals)"],
@@ -94,24 +141,8 @@ def h1_record(rows: pd.DataFrame) -> dict:
 
 
 def h11_record(rows: pd.DataFrame) -> dict:
-    elig = rows[(rows["n_quarters"] > 0) & rows["slope"].notna()]
+    verdict, best, elig = _tiered_verdict_propagation(rows)
     n = int(len(elig))
-    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
-                     & (~elig["contradicts_thesis"])]
-    suggestive = elig[(elig["slope"] > 0) & (elig["slope_lo"] > 0)
-                      & (~elig["contradicts_thesis"])]
-    contradicting = elig[elig["contradicts_thesis"]]
-    if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.iloc[0]
-    elif len(elig):
-        verdict, best = "null", elig.iloc[0]
-    else:
-        verdict = "null"
-        best = rows.iloc[0] if len(rows) else pd.Series(dtype=float)
     return {
         "id": "H11", "title": "Does the buildout pull networking revenue?",
         "horizon": "quarterly",
@@ -124,9 +155,7 @@ def h11_record(rows: pd.DataFrame) -> dict:
             {"stage": "best edge corr", "metric": "corr", "value": _num(best.get("corr"))},
             {"stage": "best edge slope", "metric": "slope", "value": _num(best.get("slope"))},
         ],
-        "stat": {"name": "slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("slope", best, n),
         "caveats": [f"~{int(elig['n_quarters'].median()) if len(elig) else 0} quarters/edge → CIs, no walk-forward",
                     "ANET/MRVL only; ALAB excluded (insufficient history)",
                     "Chain specified ex-post; tests propagation given the chain"],
@@ -150,7 +179,7 @@ def h2_record(rows: pd.DataFrame) -> dict:
             verdict = "confirmed"
         elif q <= FDR_ALPHA and slope < 0:
             verdict = "contradicts"
-        elif q <= 0.25 and slope > 0 and lo > 0:
+        elif q <= SUGGESTIVE_Q and slope > 0 and lo > 0:
             verdict = "suggestive"
         else:
             verdict = "null"
@@ -173,9 +202,7 @@ def h2_record(rows: pd.DataFrame) -> dict:
              "value": _num(best.get("neg_drift"))},
             {"stage": "pooled slope", "metric": "slope", "value": _num(best.get("slope"))},
         ],
-        "stat": {"name": "pooled_slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("pooled_slope", best, n),
         "caveats": [
             f"horizon {int(best.get('horizon')) if len(elig) else 0}d; event-clustered (quarter-block bootstrap)",
             "effective n << event count; observational; no costs",
@@ -240,30 +267,7 @@ def h6_record(rows: pd.DataFrame) -> dict:
 
 def h7_record(rows: pd.DataFrame) -> dict:
     """H7: vol term-structure slope as a forward-return timer."""
-    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
-    confirmed = elig[
-        (elig["q_value"] <= FDR_ALPHA)
-        & (elig["slope"] > 0)
-        & (~elig["contradicts_thesis"])
-        & (elig["oos_sign_rate"] >= OOS_SIGN_FLOOR)
-    ]
-    suggestive = elig[
-        (elig["q_value"] <= 0.25)
-        & (elig["slope"] > 0)
-        & (elig["slope_lo"] > 0)
-        & (~elig["contradicts_thesis"])
-    ]
-    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
-    if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
-    elif len(elig):
-        verdict, best = "null", elig.sort_values("q_value").iloc[0]
-    else:
-        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    verdict, best, elig = _tiered_verdict(rows, require_oos=True)
     interp = {
         "confirmed": "a compensated volatility-risk premium, not a free edge",
         "suggestive": "weak, possibly a risk premium",
@@ -285,9 +289,7 @@ def h7_record(rows: pd.DataFrame) -> dict:
             {"stage": "OOS sign-retention", "metric": "rate",
              "value": _num(best.get("oos_sign_rate"))},
         ],
-        "stat": {"name": "slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("slope", best, n),
         "caveats": [
             "Predictor is S&P term structure (VXN has no free term structure); targets raw forward returns.",
             "All 9 cells (3 targets x 3 horizons) are one correlated effect, not independent findings; BH-FDR over the family.",
@@ -301,22 +303,7 @@ def h7_record(rows: pd.DataFrame) -> dict:
 
 def h8_record(rows: pd.DataFrame) -> dict:
     """H8: do chip-cycle leading indicators lead chip-maker revenue?"""
-    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
-    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
-                     & (~elig["contradicts_thesis"])]
-    suggestive = elig[(elig["q_value"] <= 0.25) & (elig["slope"] > 0)
-                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
-    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
-    if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
-    elif len(elig):
-        verdict, best = "null", elig.sort_values("q_value").iloc[0]
-    else:
-        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    verdict, best, elig = _tiered_verdict(rows, require_oos=False)
     interp = {
         "confirmed": "the canary leads the fundamental (economic propagation)",
         "suggestive": "weak lead",
@@ -349,9 +336,7 @@ def h8_record(rows: pd.DataFrame) -> dict:
             {"stage": "best indicator slope", "metric": "slope", "value": _num(best.get("slope"))},
             {"stage": "selection-aware q", "metric": "q", "value": _num(best.get("q_value"))},
         ],
-        "stat": {"name": "slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("slope", best, n),
         "caveats": caveats,
         "chart": {"type": "leading_revenue", "ref": "h8"},
         "detail_rows": elig[["indicator", "best_lead", "corr", "slope", "slope_lo",
@@ -361,22 +346,7 @@ def h8_record(rows: pd.DataFrame) -> dict:
 
 def h9_record(rows: pd.DataFrame) -> dict:
     """H9: does electricity cost compress cloud gross margins?"""
-    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
-    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
-                     & (~elig["contradicts_thesis"])]
-    suggestive = elig[(elig["q_value"] <= 0.25) & (elig["slope"] > 0)
-                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
-    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
-    if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
-    elif len(elig):
-        verdict, best = "null", elig.sort_values("q_value").iloc[0]
-    else:
-        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    verdict, best, elig = _tiered_verdict(rows, require_oos=False)
     interp = {
         "confirmed": "rising power cost compresses cloud margins",
         "suggestive": "weak compression signal",
@@ -398,9 +368,7 @@ def h9_record(rows: pd.DataFrame) -> dict:
             {"stage": "selection-aware q", "metric": "q",
              "value": _num(best.get("q_value"))},
         ],
-        "stat": {"name": "compression_slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("compression_slope", best, n),
         "caveats": [
             "Slope is of Δgross-margin on NEGATED price YoY; >0 = compression.",
             "Blended gross margin (not datacenter-segment); power is small & PPA-hedged. No walk-forward.",
@@ -413,23 +381,7 @@ def h9_record(rows: pd.DataFrame) -> dict:
 
 def h10_record(rows: pd.DataFrame) -> dict:
     """H10: does electricity demand predict power-layer returns?"""
-    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
-    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
-                     & (~elig["contradicts_thesis"])
-                     & (elig["oos_sign_rate"] >= OOS_SIGN_FLOOR)]
-    suggestive = elig[(elig["q_value"] <= 0.25) & (elig["slope"] > 0)
-                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
-    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
-    if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
-    elif len(elig):
-        verdict, best = "null", elig.sort_values("q_value").iloc[0]
-    else:
-        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    verdict, best, elig = _tiered_verdict(rows, require_oos=True)
     interp = {
         "confirmed": "demand growth still predicts the forgotten plays (under-priced)",
         "suggestive": "weak predictive signal",
@@ -450,9 +402,7 @@ def h10_record(rows: pd.DataFrame) -> dict:
             {"stage": "OOS sign-retention", "metric": "rate",
              "value": _num(best.get("oos_sign_rate"))},
         ],
-        "stat": {"name": "slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("slope", best, n),
         "caveats": [
             "Demand proxy is economy-wide electricity output, NOT datacenter-specific.",
             "Name x {1,2,3}m family, BH-FDR; some names have short history (CEG/VRT); observational, no costs.",
@@ -527,23 +477,7 @@ def h15_record(rows: pd.DataFrame) -> dict:
 
 def h4_record(rows: pd.DataFrame) -> dict:
     """H4: is the chip cycle already priced into semis equity returns?"""
-    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
-    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
-                     & (~elig["contradicts_thesis"])
-                     & (elig["oos_sign_rate"] >= OOS_SIGN_FLOOR)]
-    suggestive = elig[(elig["q_value"] <= 0.25) & (elig["slope"] > 0)
-                      & (elig["slope_lo"] > 0) & (~elig["contradicts_thesis"])]
-    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
-    if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
-    elif len(elig):
-        verdict, best = "null", elig.sort_values("q_value").iloc[0]
-    else:
-        verdict, best = "null", (rows.iloc[0] if len(rows) else pd.Series(dtype=float))
+    verdict, best, elig = _tiered_verdict(rows, require_oos=True)
     interp = {
         "confirmed": "the public cycle still predicts forward returns (under-priced)",
         "suggestive": "weak predictive signal",
@@ -563,9 +497,7 @@ def h4_record(rows: pd.DataFrame) -> dict:
             {"stage": "OOS sign-retention", "metric": "rate",
              "value": _num(best.get("oos_sign_rate"))},
         ],
-        "stat": {"name": "slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("slope", best, n),
         "caveats": [
             "Indicators publication-lagged (PIT); monthly walk-forward; observational, no costs.",
             "Family = indicators x {1,2,3}m horizons, BH-FDR corrected; Korea exports are total, not semis-only.",
@@ -577,34 +509,13 @@ def h4_record(rows: pd.DataFrame) -> dict:
 
 
 def h5_record(rows: pd.DataFrame) -> dict:
-    elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
-    n = int(len(elig))
-    confirmed = elig[
-        (elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0) & (~elig["contradicts_thesis"])
-    ]
-    suggestive = elig[
-        (elig["q_value"] <= 0.25)
-        & (elig["slope"] > 0)
-        & (elig["slope_lo"] > 0)
-        & (~elig["contradicts_thesis"])
-    ]
     # "Contradicts" must be a STATISTICALLY SIGNIFICANT reversal (negative slope
     # passing FDR) — not a near-zero negative slope. Otherwise it is just noise =>
     # priced in (null). A slope of -0.014 with q=1.0 is not a reversal claim.
-    contradicting = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] < 0)]
-    if len(confirmed):
-        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
-    elif len(suggestive):
-        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
-    elif len(contradicting):
-        verdict, best = "contradicts", contradicting.sort_values("q_value").iloc[0]
-    elif len(elig):
-        # Null: surface the closest-to-significant edge so the card shows that even
-        # the strongest link does not pass ("priced in"), not an arbitrary edge.
-        verdict, best = "null", elig.sort_values("q_value").iloc[0]
-    else:
-        verdict = "null"
-        best = rows.iloc[0] if len(rows) else pd.Series(dtype=float)
+    # Null surfaces the closest-to-significant edge (sorted by q) so the card shows
+    # that even the strongest link does not pass ("priced in").
+    verdict, best, elig = _tiered_verdict(rows, require_oos=False)
+    n = int(len(elig))
     interp = {
         "confirmed": "not yet priced in",
         "suggestive": "weak under-pricing signal",
@@ -623,9 +534,7 @@ def h5_record(rows: pd.DataFrame) -> dict:
             {"stage": "selected horizon (days)", "metric": "days",
              "value": _num(best.get("horizon"), 0)},
         ],
-        "stat": {"name": "slope", "value": _num(best.get("slope")),
-                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
-                 "q_value": _num(best.get("q_value")), "n": n},
+        "stat": _slope_stat("slope", best, n),
         "caveats": [
             f"~{int(elig['n_obs'].median()) if len(elig) else 0} filings/edge; overlapping forward windows",
             "Confirmed means not-yet-priced-in; Null means priced in",
