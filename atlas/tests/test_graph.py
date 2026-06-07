@@ -200,3 +200,22 @@ def test_networking_nodes_have_ciks():
     assert cik["marvell"] == "0001835632"
     # de-beta sector wired for the networking stage
     assert STAGE_SECTOR.get("networking") == "semis"
+
+
+def test_load_graph_empty_yaml_returns_empty_frames(tmp_path):
+    p = tmp_path / "empty.yml"
+    p.write_text("")
+    nodes, edges = load_graph(p)
+    assert len(nodes) == 0 and len(edges) == 0
+
+
+def test_load_graph_non_mapping_yaml_raises(tmp_path):
+    p = tmp_path / "list.yml"
+    p.write_text("- just\n- a list\n")
+    with pytest.raises(ValueError):
+        load_graph(p)
+
+
+def test_load_graph_missing_file_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        load_graph(tmp_path / "nope.yml")

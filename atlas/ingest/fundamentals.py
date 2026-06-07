@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import time
 from pathlib import Path
 
@@ -16,6 +18,28 @@ from ingest.schemas import FUNDAMENTAL_SCHEMA
 CONCEPT_URL = (
     "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{tag}.json"
 )
+_CIK_RE = re.compile(r"\d{10}")
+_TAG_RE = re.compile(r"[A-Za-z0-9]+")
+
+
+def _validate_cik(cik: str) -> str:
+    """SEC CIK must be exactly 10 digits before it enters the request URL."""
+    if not _CIK_RE.fullmatch(cik):
+        raise ValueError(f"invalid CIK (expected 10 digits): {cik!r}")
+    return cik
+
+
+def _validate_tag(tag: str) -> str:
+    """us-gaap concept tags are alphanumeric; reject anything that could alter the URL path."""
+    if not _TAG_RE.fullmatch(tag):
+        raise ValueError(f"invalid us-gaap tag: {tag!r}")
+    return tag
+
+
+def _strict_mode() -> bool:
+    """When ATLAS_INGEST_STRICT is set, a total ingest failure raises instead of writing
+    an empty fallback (so CI fails fast rather than silently producing null verdicts)."""
+    return bool(os.getenv("ATLAS_INGEST_STRICT"))
 COLUMNS = [
     "cik",
     "ticker",
@@ -126,10 +150,12 @@ def stitch_concepts(frames: list[pd.DataFrame]) -> pd.DataFrame:
 def fetch_concept(cik: str, tag: str) -> dict | None:  # pragma: no cover
     """Fetch one us-gaap company concept; return None when a filer lacks the tag."""
 
+    url = CONCEPT_URL.format(cik=_validate_cik(cik), tag=_validate_tag(tag))
+
     def _download() -> dict | None:
         time.sleep(SEC_RATE_LIMIT_SECONDS)
         resp = requests.get(
-            CONCEPT_URL.format(cik=cik, tag=tag),
+            url,
             headers={"User-Agent": SEC_USER_AGENT},
             timeout=30,
         )
@@ -225,6 +251,11 @@ def run() -> None:  # pragma: no cover
             print(f"fundamentals: wrote {len(combined)} rows for {ticker}")
 
     if not wrote_any:
+        if _strict_mode():
+            raise RuntimeError(
+                "fundamentals: all metrics failed and ATLAS_INGEST_STRICT is set "
+                f"({len(unresolved)} unresolved)"
+            )
         atomic_write_parquet(_empty_frame(), out_dir / "_empty.parquet")
         print("fundamentals: all metrics failed; wrote empty fallback parquet")
     if unresolved:
