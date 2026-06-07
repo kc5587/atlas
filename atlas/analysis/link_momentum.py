@@ -103,13 +103,14 @@ def link_signal_panel(
         rows.extend(
             {
                 "node": supplier,
+                "ticker": supplier_ticker,
                 "month": month,
                 "signal": float(row["signal"]),
                 "fwd_target": float(row["fwd_target"]),
             }
             for month, row in paired.iterrows()
         )
-    return pd.DataFrame(rows, columns=["node", "month", "signal", "fwd_target"])
+    return pd.DataFrame(rows, columns=["node", "ticker", "month", "signal", "fwd_target"])
 
 
 def _pooled_slope(signal: np.ndarray, target: np.ndarray) -> float:
@@ -208,4 +209,84 @@ def link_predictability(
         "n_nodes": int(panel["node"].nunique()),
         "n_months": int(panel["month"].nunique()),
         "n_folds": n_folds,
+    }
+
+
+def _max_drawdown(equity: np.ndarray) -> float:
+    peak = np.maximum.accumulate(equity)
+    drawdown = equity / peak - 1.0
+    return float(drawdown.min()) if len(drawdown) else 0.0
+
+
+def _alpha_tstat(port: pd.Series, factors: pd.DataFrame, *, nw_lag: int = 3) -> tuple[float, float]:
+    df = pd.concat([port.rename("p"), factors], axis=1, join="inner").dropna()
+    if len(df) < 12:
+        return float("nan"), float("nan")
+    y = df["p"].to_numpy()
+    X = np.column_stack([np.ones(len(df)), df[factors.columns].to_numpy()])
+    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    resid = y - X @ beta
+    xtx_inv = np.linalg.pinv(X.T @ X)
+    score = resid[:, None] * X
+    S = score.T @ score
+    for lag in range(1, nw_lag + 1):
+        weight = 1.0 - lag / (nw_lag + 1)
+        gamma = score[lag:].T @ score[:-lag]
+        S += weight * (gamma + gamma.T)
+    cov = xtx_inv @ S @ xtx_inv
+    alpha = float(beta[0])
+    se = float(np.sqrt(cov[0, 0]))
+    return alpha * 12, (alpha / se if se > 0 else float("nan"))
+
+
+def link_backtest(panel: pd.DataFrame, raw_monthly: pd.DataFrame) -> dict:
+    """Equal-weight sign-based L/S of supplier raw forward returns, monthly."""
+    raw_forward = raw_monthly.shift(-1)
+    months = pd.DatetimeIndex(sorted(panel["month"].unique()))
+    port = []
+    for month in months:
+        if month not in raw_forward.index:
+            continue
+        current = panel[panel["month"] == month]
+        longs, shorts = [], []
+        for row in current.itertuples():
+            if row.ticker not in raw_forward.columns:
+                continue
+            forward_return = raw_forward.at[month, row.ticker]
+            if not np.isfinite(forward_return) or row.signal == 0:
+                continue
+            (longs if row.signal > 0 else shorts).append(float(forward_return))
+        if not longs and not shorts:
+            continue
+        ret = (np.mean(longs) if longs else 0.0) - (np.mean(shorts) if shorts else 0.0)
+        port.append((month, float(ret)))
+
+    if len(port) < 6:
+        return {
+            "sharpe": float("nan"),
+            "ann_return": float("nan"),
+            "ann_vol": float("nan"),
+            "alpha": float("nan"),
+            "t_stat": float("nan"),
+            "max_drawdown": 0.0,
+            "n_months_bt": len(port),
+        }
+
+    returns = pd.Series([ret for _, ret in port], index=[month for month, _ in port])
+    ann_return = float(returns.mean() * 12)
+    ann_vol = float(returns.std(ddof=1) * np.sqrt(12))
+    sharpe = float(ann_return / ann_vol) if ann_vol > 0 else float("nan")
+    etfs = [etf for etf in FACTOR_ETFS if etf in raw_monthly.columns]
+    alpha, t_stat = (
+        _alpha_tstat(returns, raw_monthly[etfs]) if etfs else (float("nan"), float("nan"))
+    )
+    equity = (1.0 + returns).cumprod().to_numpy()
+    return {
+        "sharpe": sharpe,
+        "ann_return": ann_return,
+        "ann_vol": ann_vol,
+        "alpha": alpha,
+        "t_stat": t_stat,
+        "max_drawdown": _max_drawdown(equity),
+        "n_months_bt": int(len(returns)),
     }

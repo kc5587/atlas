@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from analysis.link_momentum import (
+    link_backtest,
     link_predictability,
     link_signal_panel,
     monthly_returns,
@@ -100,3 +101,35 @@ def test_link_predictability_null_on_noise():
     out = link_predictability(_panel_with_signal(0.0), iters=300, seed=2)
 
     assert out["p_value"] > 0.05
+
+
+def test_link_backtest_profits_when_signal_predicts():
+    rng = np.random.default_rng(0)
+    months = pd.date_range("2016-01-31", periods=48, freq="ME")
+    raw = {}
+    rows = []
+    for k in range(6):
+        signal = rng.choice([-1.0, 1.0], 48) * 0.02
+        returns = np.concatenate([
+            [0.0],
+            (np.sign(signal) * 0.03 + rng.normal(0, 0.01, 48))[:-1],
+        ])
+        raw[f"T{k}"] = pd.Series(returns, index=months)
+        rows.extend(
+            {
+                "node": f"n{k}",
+                "ticker": f"T{k}",
+                "month": month,
+                "signal": signal[i],
+                "fwd_target": returns[i + 1],
+            }
+            for i, month in enumerate(months[:-1])
+        )
+    panel = pd.DataFrame(rows)
+    raw_wide = pd.DataFrame(raw)
+
+    out = link_backtest(panel, raw_wide)
+
+    assert out["sharpe"] > 0
+    assert out["n_months_bt"] > 10
+    assert -1.0 <= out["max_drawdown"] <= 0.0
