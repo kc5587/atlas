@@ -25,7 +25,7 @@
 </script>
 
 {#if node}
-  <aside class="panel" role="dialog" aria-label={`${node.name} details`}>
+  <aside class="panel" aria-label={`${node.name} details`}>
     <button class="close" onclick={onClose} aria-label="Close panel">×</button>
     <h3>{node.name}</h3>
     <p class="meta">{node.stage} · {node.region} · {node.tickers.join(", ")}</p>

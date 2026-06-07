@@ -48,7 +48,7 @@
     <section
       class="scene-step"
       class:active={i === current}
-      tabindex="0"
+      tabindex="-1"
       role="group"
       aria-roledescription="scene"
       aria-label={`Scene ${i + 1} of ${SCENES.length}: ${s.title}`}
