@@ -145,11 +145,13 @@ nodes:
     tickers: [ANET]
     stage: networking
     region: US
+    cik: "0001596532"
   - id: marvell
     name: Marvell Technology
     tickers: [MRVL]
     stage: networking
     region: US
+    cik: "0001835632"
   - id: astera_labs
     name: Astera Labs
     tickers: [ALAB]

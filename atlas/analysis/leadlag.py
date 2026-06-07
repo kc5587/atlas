@@ -149,6 +149,30 @@ def exclude_stage(
     return core_nodes.reset_index(drop=True), core_edges.reset_index(drop=True)
 
 
+def stage_tickers(nodes: pd.DataFrame, stage: str) -> set[str]:
+    """All tickers belonging to nodes in `stage`."""
+    out: set[str] = set()
+    for raw in nodes.loc[nodes["stage"] == stage, "tickers"]:
+        out |= set(json.loads(raw))
+    return out
+
+
+def core_fundamentals(
+    fundamentals: pd.DataFrame, nodes: pd.DataFrame, *, exclude_stages: list[str]
+) -> pd.DataFrame:
+    """Fundamentals with the excluded stages' tickers removed.
+
+    The node/edge partition (`exclude_stage`) does NOT remove a stage's tickers
+    from the fundamentals frame, so cross-sectional scans (e.g. H1's leave-one-out
+    cycle factor, built from every fundamentals ticker) would otherwise pull in an
+    excluded stage. Routing core scans through this keeps their families clean.
+    """
+    excl: set[str] = set()
+    for s in exclude_stages:
+        excl |= stage_tickers(nodes, s)
+    return fundamentals[~fundamentals["ticker"].isin(excl)].reset_index(drop=True)
+
+
 _LEADLAG_COLUMNS = [
     "pair_type", "left", "right", "lag", "corr", "p_value", "q_value", "n_eff", "stable",
 ]
@@ -478,8 +502,14 @@ def run() -> None:  # pragma: no cover
             columns=["ticker", "period_end", "filed", "revenue", "capex", "gross_margin"]
         )
     core_nodes, core_edges = exclude_stage(nodes, edges, "power")
+    core_nodes, core_edges = exclude_stage(core_nodes, core_edges, "networking")
+    # Networking suppliers are excluded from the core node/edge scans above, but
+    # the fundamentals frame is keyed by ticker -- so cross-sectional scans (H1's
+    # leave-one-out cycle factor) would still pull ANET/MRVL in. Partition the
+    # fundamentals too, so the core families are identical to a no-networking run.
+    core_fund = core_fundamentals(fundamentals, nodes, exclude_stages=["networking"])
     legacy = build_leadlag_table(
-        returns, macro, core_nodes, core_edges, fundamentals=fundamentals
+        returns, macro, core_nodes, core_edges, fundamentals=core_fund
     )
     non_edge = legacy[legacy["pair_type"] != "edge"]
     hardened = pd.DataFrame(build_hardened_edges(
@@ -489,7 +519,7 @@ def run() -> None:  # pragma: no cover
     con.execute("CREATE OR REPLACE TABLE leadlag AS SELECT * FROM ll")
     con.unregister("ll")
     from analysis.fundamentals_leadlag import capex_revenue_edges
-    h1 = capex_revenue_edges(fundamentals, core_nodes, core_edges,
+    h1 = capex_revenue_edges(core_fund, core_nodes, core_edges,
                              iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
     con.register("h1t", h1)
     con.execute("CREATE OR REPLACE TABLE fundamentals_leadlag AS SELECT * FROM h1t")
@@ -502,7 +532,7 @@ def run() -> None:  # pragma: no cover
     }
     _factors = {etf: _ret[etf] for etf in FACTOR_TICKERS.values() if etf in _ret}
     h5 = capex_price_edges(
-        fundamentals,
+        core_fund,
         returns,
         _factors,
         core_nodes,
@@ -515,9 +545,23 @@ def run() -> None:  # pragma: no cover
     con.execute("CREATE OR REPLACE TABLE capex_price AS SELECT * FROM h5t")
     con.unregister("h5t")
     print(f"capex_price: wrote {len(h5)} capex->price edge rows")
+    from analysis.networking_signal import networking_propagation, networking_pricing
+    h11 = networking_propagation(fundamentals, nodes, edges,
+                                 iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+    con.register("h11t", h11)
+    con.execute("CREATE OR REPLACE TABLE networking_propagation AS SELECT * FROM h11t")
+    con.unregister("h11t")
+    print(f"networking_propagation: wrote {len(h11)} capex->revenue edge rows")
+    h12 = networking_pricing(fundamentals, returns, _factors, nodes, edges,
+                             horizons=H5_FORWARD_HORIZONS,
+                             iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+    con.register("h12t", h12)
+    con.execute("CREATE OR REPLACE TABLE networking_pricing AS SELECT * FROM h12t")
+    con.unregister("h12t")
+    print(f"networking_pricing: wrote {len(h12)} capex->price edge rows")
     from analysis.event_drift import event_drift
     h2 = event_drift(
-        fundamentals,
+        core_fund,
         returns,
         _factors,
         core_nodes,

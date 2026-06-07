@@ -93,6 +93,49 @@ def h1_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h11_record(rows: pd.DataFrame) -> dict:
+    elig = rows[(rows["n_quarters"] > 0) & rows["slope"].notna()]
+    n = int(len(elig))
+    confirmed = elig[(elig["q_value"] <= FDR_ALPHA) & (elig["slope"] > 0)
+                     & (~elig["contradicts_thesis"])]
+    suggestive = elig[(elig["slope"] > 0) & (elig["slope_lo"] > 0)
+                      & (~elig["contradicts_thesis"])]
+    contradicting = elig[elig["contradicts_thesis"]]
+    if len(confirmed):
+        verdict, best = "confirmed", confirmed.sort_values("q_value").iloc[0]
+    elif len(suggestive):
+        verdict, best = "suggestive", suggestive.sort_values("p_selection").iloc[0]
+    elif len(contradicting):
+        verdict, best = "contradicts", contradicting.iloc[0]
+    elif len(elig):
+        verdict, best = "null", elig.iloc[0]
+    else:
+        verdict = "null"
+        best = rows.iloc[0] if len(rows) else pd.Series(dtype=float)
+    return {
+        "id": "H11", "title": "Does the buildout pull networking revenue?",
+        "horizon": "quarterly",
+        "claim": "Hyperscaler capex leads networking-supplier revenue by 1–4 quarters",
+        "mechanism": "Switches/optics are bought per GPU cluster — direct complements",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "raw |corr|", "metric": "|corr|",
+             "value": _num(elig["corr"].abs().median()) if len(elig) else 0.0},
+            {"stage": "best edge corr", "metric": "corr", "value": _num(best.get("corr"))},
+            {"stage": "best edge slope", "metric": "slope", "value": _num(best.get("slope"))},
+        ],
+        "stat": {"name": "slope", "value": _num(best.get("slope")),
+                 "ci": [_num(best.get("slope_lo")), _num(best.get("slope_hi"))],
+                 "q_value": _num(best.get("q_value")), "n": n},
+        "caveats": [f"~{int(elig['n_quarters'].median()) if len(elig) else 0} quarters/edge → CIs, no walk-forward",
+                    "ANET/MRVL only; ALAB excluded (insufficient history)",
+                    "Chain specified ex-post; tests propagation given the chain"],
+        "chart": {"type": "capex_revenue_overlay", "ref": "h11"},
+        "detail_rows": elig[["left", "right", "lag", "corr", "slope", "slope_lo",
+                             "slope_hi", "q_value", "n_quarters"]].to_dict("records"),
+    }
+
+
 def h2_record(rows: pd.DataFrame) -> dict:
     elig = rows[rows["slope"].notna()]
     n = int(elig["n_events"].iloc[0]) if len(elig) else 0
@@ -532,6 +575,19 @@ def h5_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h12_record(rows: pd.DataFrame) -> dict:
+    rec = h5_record(rows)
+    rec["id"] = "H12"
+    rec["title"] = "Is the networking buildout already priced in?"
+    rec["claim"] = "Is hyperscaler capex already priced into ANET/MRVL forward returns?"
+    rec["mechanism"] = "If markets price the complement promptly, no forward edge remains"
+    rec["caveats"] = ["ANET/MRVL only; ALAB excluded (insufficient history)",
+                      "PIT on filing date; M2-residual forward returns; no walk-forward",
+                      "Confirmed = NOT yet priced in · Null = priced in"]
+    rec["chart"] = {"type": "capex_price", "ref": "h12"}
+    return rec
+
+
 def build_signal_records(con) -> list[dict]:  # pragma: no cover
     edges = con.execute(
         'SELECT "left","right",factor_model,corr_raw,corr_resid,corr_contemporaneous,'
@@ -544,12 +600,24 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h1 = con.execute('SELECT * FROM fundamentals_leadlag').df()
         if len(h1):
             records.append(h1_record(h1))
+    has_h11 = con.execute("SELECT count(*) FROM information_schema.tables "
+                          "WHERE table_name='networking_propagation'").fetchone()[0] > 0
+    if has_h11:
+        h11 = con.execute('SELECT * FROM networking_propagation').df()
+        if len(h11):
+            records.append(h11_record(h11))
     has_h5 = con.execute("SELECT count(*) FROM information_schema.tables "
                          "WHERE table_name='capex_price'").fetchone()[0] > 0
     if has_h5:
         h5 = con.execute('SELECT * FROM capex_price').df()
         if len(h5):
             records.append(h5_record(h5))
+    has_h12 = con.execute("SELECT count(*) FROM information_schema.tables "
+                          "WHERE table_name='networking_pricing'").fetchone()[0] > 0
+    if has_h12:
+        h12 = con.execute('SELECT * FROM networking_pricing').df()
+        if len(h12):
+            records.append(h12_record(h12))
     has_h2 = con.execute("SELECT count(*) FROM information_schema.tables "
                          "WHERE table_name='event_drift'").fetchone()[0] > 0
     if has_h2:

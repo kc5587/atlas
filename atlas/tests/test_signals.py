@@ -125,6 +125,10 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(df=_edges_frame())
             if "table_name='capex_price'" in sql:
                 return Result(row=(0,))
+            if "table_name='networking_propagation'" in sql:
+                return Result(row=(0,))
+            if "table_name='networking_pricing'" in sql:
+                return Result(row=(0,))
             if "table_name='event_drift'" in sql:
                 return Result(row=(0,))
             if "table_name='vol_premium'" in sql:
@@ -200,6 +204,32 @@ def test_h5_significant_reversal_is_contradicts():
          "contradicts_thesis": True, "n_obs": 25},
     ])
     assert h5_record(rows)["verdict"] == "contradicts"
+
+
+def test_h11_record_confirmed_on_positive_significant_edge():
+    from analysis.signals import h11_record
+    rows = pd.DataFrame([{
+        "left": "microsoft", "right": "arista", "lag": 1, "corr": 0.7,
+        "slope": 0.8, "slope_lo": 0.2, "slope_hi": 1.4, "p_selection": 0.001,
+        "q_value": 0.01, "n_quarters": 16, "contradicts_thesis": False,
+    }])
+    rec = h11_record(rows)
+    assert rec["id"] == "H11"
+    assert rec["verdict"] == "confirmed"
+    assert rec["chart"]["type"] == "capex_revenue_overlay"
+
+
+def test_h12_record_null_when_not_priced():
+    from analysis.signals import h12_record
+    rows = pd.DataFrame([{
+        "left": "microsoft", "right": "arista", "horizon": 63, "corr": 0.05,
+        "slope": 0.01, "slope_lo": -0.3, "slope_hi": 0.32, "p_selection": 0.8,
+        "q_value": 0.9, "n_obs": 18, "contradicts_thesis": False,
+    }])
+    rec = h12_record(rows)
+    assert rec["id"] == "H12"
+    assert rec["verdict"] == "null"
+    assert rec["chart"]["type"] == "capex_price"
 
 
 def _h2_row(slope=0.01, q=0.05, neg=False):

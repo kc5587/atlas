@@ -189,3 +189,14 @@ def test_seed_has_new_supply_edges():
                 "marvell", "astera_labs", "ge_vernova", "quanta"}
     cited = edges[edges["from_id"].isin(new_from)]
     assert (cited["evidence"].str.len() > 0).all()
+
+
+def test_networking_nodes_have_ciks():
+    from config import SEED_PATH, STAGE_SECTOR
+
+    nodes, _ = load_graph(SEED_PATH)
+    cik = dict(zip(nodes["id"], nodes["cik"]))
+    assert cik["arista"] == "0001596532"
+    assert cik["marvell"] == "0001835632"
+    # de-beta sector wired for the networking stage
+    assert STAGE_SECTOR.get("networking") == "semis"
