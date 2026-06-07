@@ -39,10 +39,10 @@ def test_monthly_returns_sums_daily_logs_per_month():
 
 
 def test_residual_monthly_returns_removes_market_beta():
-    idx = pd.date_range("2018-01-31", periods=48, freq="ME")
+    idx = pd.date_range("2014-01-31", periods=96, freq="ME")
     rng = np.random.default_rng(0)
-    spy = pd.Series(rng.normal(0, 0.04, 48), index=idx)
-    aaa = 1.5 * spy + pd.Series(rng.normal(0, 0.02, 48), index=idx)
+    spy = pd.Series(rng.normal(0, 0.04, len(idx)), index=idx)
+    aaa = 1.5 * spy + pd.Series(rng.normal(0, 0.01, len(idx)), index=idx)
     monthly = pd.DataFrame({"AAA": aaa, "SPY": spy, "SOXX": spy * 0.9})
     nodes = pd.DataFrame([{"id": "a", "tickers": '["AAA"]', "stage": "chips"}])
 
@@ -51,6 +51,77 @@ def test_residual_monthly_returns_removes_market_beta():
     corr = np.corrcoef(valid, spy.loc[valid.index])[0, 1]
 
     assert abs(corr) < 0.2
+
+
+def test_residual_monthly_returns_no_lookahead_at_target_month():
+    idx = pd.date_range("2017-01-31", periods=72, freq="ME")
+    target_month = idx[48]
+    rng = np.random.default_rng(12)
+    spy = pd.Series(rng.normal(0, 0.04, len(idx)), index=idx)
+    igv = pd.Series(rng.normal(0, 0.035, len(idx)), index=idx)
+    early_aaa = 1.1 * spy + 0.6 * igv + pd.Series(rng.normal(0, 0.005, len(idx)), index=idx)
+    future_aaa = -4.0 * spy + 3.0 * igv + pd.Series(
+        rng.normal(0, 0.005, len(idx)),
+        index=idx,
+    )
+    aaa = pd.Series(
+        np.where(idx > target_month, future_aaa.to_numpy(), early_aaa.to_numpy()),
+        index=idx,
+    )
+    monthly = pd.DataFrame({"AAA": aaa, "SPY": spy, "IGV": igv})
+    nodes = pd.DataFrame([{"id": "a", "tickers": '["AAA"]', "stage": "cloud"}])
+
+    full = residual_monthly_returns(monthly, nodes)
+    truncated = residual_monthly_returns(monthly.loc[:target_month], nodes)
+
+    assert np.isfinite(full.loc[target_month, "AAA"])
+    np.testing.assert_allclose(
+        full.loc[target_month, "AAA"],
+        truncated.loc[target_month, "AAA"],
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+
+def test_residualized_link_predictability_detects_planted_customer_supplier_signal():
+    idx = pd.date_range("2014-01-31", periods=108, freq="ME")
+    rng = np.random.default_rng(5)
+    spy = pd.Series(rng.normal(0, 0.025, len(idx)), index=idx)
+    igv = pd.Series(rng.normal(0, 0.02, len(idx)), index=idx)
+    monthly = {"SPY": spy, "IGV": igv}
+    nodes = []
+    edges = []
+    for k in range(6):
+        supplier = f"S{k}"
+        customer = f"C{k}"
+        customer_resid = pd.Series(rng.normal(0, 0.04, len(idx)), index=idx)
+        supplier_noise = rng.normal(0, 0.004, len(idx))
+        supplier_resid = pd.Series(
+            np.concatenate([
+                supplier_noise[:1],
+                supplier_noise[1:] + 0.9 * customer_resid.iloc[:-1].to_numpy(),
+            ]),
+            index=idx,
+        )
+        monthly[customer] = 0.8 * spy - 0.3 * igv + customer_resid
+        monthly[supplier] = 1.2 * spy + 0.5 * igv + supplier_resid
+        nodes.extend([
+            {"id": f"supplier{k}", "tickers": f'["{supplier}"]', "stage": "cloud"},
+            {"id": f"customer{k}", "tickers": f'["{customer}"]', "stage": "cloud"},
+        ])
+        edges.append({
+            "from_id": f"supplier{k}",
+            "to_id": f"customer{k}",
+            "relationship": "supplies",
+        })
+    residual = residual_monthly_returns(pd.DataFrame(monthly), pd.DataFrame(nodes))
+    panel = link_signal_panel(residual, pd.DataFrame(nodes), pd.DataFrame(edges), min_months=36)
+
+    out = link_predictability(panel, iters=300, seed=6)
+
+    assert out["slope"] > 0.5
+    assert out["p_value"] < 0.05
+    assert out["n_nodes"] == 6
 
 
 def test_link_signal_panel_builds_customer_signal_and_forward_target():

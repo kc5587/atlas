@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from analysis.fundamentals_leadlag import bootstrap_slope_ci
-from analysis.significance import block_resample_one
+from analysis.significance import block_resample_one, corr_slope as _corr_slope
 
 
 def indicator_yoy(level: pd.Series, *, pub_lag_months: int) -> pd.Series:
@@ -36,12 +36,6 @@ def sector_revenue_yoy(fundamentals: pd.DataFrame, *, names: list[str]) -> pd.Se
     if not per_name:
         return pd.Series(dtype=float)
     return pd.concat(per_name, axis=1).median(axis=1).dropna()
-
-
-def _corr_slope(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-    if len(x) < 3 or np.std(x) == 0 or np.std(y) == 0:
-        return np.nan, np.nan
-    return float(np.corrcoef(x, y)[0, 1]), float(np.polyfit(x, y, 1)[0])
 
 
 def _aligned_lead(indicator_q: pd.Series, revenue_q: pd.Series, lead: int) -> tuple[np.ndarray, np.ndarray]:

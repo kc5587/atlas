@@ -34,6 +34,8 @@ from analysis.oos import oos_stability
 from analysis.residualize import residual_for_spec
 from analysis.significance import _corr_at_lag, selection_aware
 
+STABLE_HALF_LAG_TOLERANCE = 2
+
 
 def log_returns(prices: pd.Series) -> pd.Series:
     """Daily log returns; index preserved, first obs dropped."""
@@ -130,12 +132,18 @@ def stationary_bootstrap_pvalue(
 def bh_fdr(pvalues: np.ndarray) -> np.ndarray:
     """Benjamini-Hochberg adjusted q-values."""
     p = np.asarray(pvalues, dtype=float)
-    n = len(p)
-    order = np.argsort(p)
-    ranked = p[order] * n / (np.arange(n) + 1)
+    q = np.full(len(p), np.nan, dtype=float)
+    finite = np.isfinite(p)
+    if not finite.any():
+        return q
+    valid = p[finite]
+    n = len(valid)
+    order = np.argsort(valid)
+    ranked = valid[order] * n / (np.arange(n) + 1)
     q_sorted = np.minimum.accumulate(ranked[::-1])[::-1]
-    q = np.empty(n)
-    q[order] = np.clip(q_sorted, 0, 1)
+    q_valid = np.empty(n)
+    q_valid[order] = np.clip(q_sorted, 0, 1)
+    q[finite] = q_valid
     return q
 
 
@@ -217,17 +225,30 @@ def _returns_on_filed_dates(
 
 
 def _stable_across_halves(left: pd.Series, right: pd.Series, lag: int) -> bool:
+    """Require half-sample peak lags to stay close and corr signs to agree."""
     half = len(left) // 2
     if half < 30:
         return False
-    peaks = []
+    peaks: list[tuple[int, float]] = []
     for sl in (slice(0, half), slice(half, None)):
         t = cross_correlations(left.iloc[sl], right.iloc[sl], max_lag=abs(lag) + 5)
         t = t.dropna(subset=["corr"])
         if t.empty:
             return False
-        peaks.append(int(t.loc[t["corr"].abs().idxmax(), "lag"]))
-    return all(np.sign(p) == np.sign(lag) for p in peaks) if lag != 0 else all(p == 0 for p in peaks)
+        peak = t.loc[t["corr"].abs().idxmax()]
+        peaks.append((int(peak["lag"]), float(peak["corr"])))
+    (lag_h1, corr_h1), (lag_h2, corr_h2) = peaks
+    same_lag_direction = (
+        abs(lag_h1) <= STABLE_HALF_LAG_TOLERANCE
+        and abs(lag_h2) <= STABLE_HALF_LAG_TOLERANCE
+        if lag == 0
+        else np.sign(lag_h1) == np.sign(lag) and np.sign(lag_h2) == np.sign(lag)
+    )
+    return bool(
+        same_lag_direction
+        and abs(lag_h1 - lag_h2) <= STABLE_HALF_LAG_TOLERANCE
+        and np.sign(corr_h1) == np.sign(corr_h2)
+    )
 
 
 def _lagged_arrays(left: pd.Series, right: pd.Series, lag: int) -> tuple[np.ndarray, np.ndarray]:
@@ -415,7 +436,13 @@ def build_leadlag_table(
 
     df = pd.DataFrame(rows, columns=_LEADLAG_COLUMNS)
     if not df.empty:
-        df["q_value"] = bh_fdr(df["p_value"].to_numpy())
+        family_cols = [c for c in ("pair_type", "family", "factor_model") if c in df.columns]
+        if family_cols:
+            by = family_cols[0] if len(family_cols) == 1 else family_cols
+            for _, idx in df.groupby(by, sort=False).groups.items():
+                df.loc[idx, "q_value"] = bh_fdr(df.loc[idx, "p_value"].to_numpy())
+        else:
+            df["q_value"] = bh_fdr(df["p_value"].to_numpy())
     return df
 
 
@@ -444,10 +471,10 @@ def build_hardened_edges(returns, nodes, edges, *, iters, seed) -> list[dict]:
             paired = pd.concat([left.rename("l"), right.rename("r")], axis=1, join="inner").dropna()
             if len(paired) < PRICE_NMIN:
                 continue
-            raw = _corr_at_lag(ret[lt].reindex(paired.index).to_numpy(),
-                               ret[rt].reindex(paired.index).to_numpy(), LAG_MIN)
             sig = selection_aware(paired["l"].to_numpy(), paired["r"].to_numpy(),
                                   lag_min=LAG_MIN, lag_max=LAG_MAX, iters=iters, seed=seed)
+            raw = _corr_at_lag(ret[lt].reindex(paired.index).to_numpy(),
+                               ret[rt].reindex(paired.index).to_numpy(), int(sig["lag"]))
             oos = oos_stability(left, right, lag_min=LAG_MIN, lag_max=LAG_MAX,
                                 test_days=OOS_TEST_DAYS, step_days=OOS_STEP_DAYS,
                                 init_train_frac=OOS_INIT_TRAIN_FRAC, embargo=OOS_EMBARGO_DAYS)
@@ -484,10 +511,9 @@ def build_hardened_edges(returns, nodes, edges, *, iters, seed) -> list[dict]:
     return rows
 
 
-def run() -> None:  # pragma: no cover
+def _load_inputs(con):  # pragma: no cover
     import duckdb
 
-    con = duckdb.connect(str(DUCKDB_PATH))
     returns = con.execute("SELECT ticker, date, log_return FROM returns").fetchdf()
     macro = con.execute("SELECT series_id, date, value FROM macro_daily").fetchdf()
     nodes = con.execute("SELECT * FROM graph_nodes").fetchdf()
@@ -508,57 +534,104 @@ def run() -> None:  # pragma: no cover
     # leave-one-out cycle factor) would still pull ANET/MRVL in. Partition the
     # fundamentals too, so the core families are identical to a no-networking run.
     core_fund = core_fundamentals(fundamentals, nodes, exclude_stages=["networking"])
+    try:
+        vol = con.execute("SELECT series, date, close FROM vol_indices").fetchdf()
+    except duckdb.CatalogException:
+        vol = pd.DataFrame(columns=["series", "date", "close"])
+    return returns, macro, nodes, edges, fundamentals, vol, core_nodes, core_edges, core_fund
+
+
+def _write_table(con, name: str, df: pd.DataFrame, msg: str) -> None:
+    if not name or not name.replace("_", "").isalnum() or name[0].isdigit():
+        raise ValueError(f"invalid DuckDB table name: {name}")
+    con.register("_pipeline_df", df)
+    try:
+        con.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT * FROM _pipeline_df")
+    finally:
+        con.unregister("_pipeline_df")
+    print(msg)
+
+
+def _factor_returns(returns: pd.DataFrame) -> dict[str, pd.Series]:
+    ret = {
+        t: g.set_index("date")["log_return"].sort_index()
+        for t, g in returns.groupby("ticker")
+    }
+    return {etf: ret[etf] for etf in FACTOR_TICKERS.values() if etf in ret}
+
+
+def compute_leadlag(
+    returns: pd.DataFrame,
+    macro: pd.DataFrame,
+    core_nodes: pd.DataFrame,
+    core_edges: pd.DataFrame,
+    core_fund: pd.DataFrame,
+) -> pd.DataFrame:
     legacy = build_leadlag_table(
         returns, macro, core_nodes, core_edges, fundamentals=core_fund
     )
     non_edge = legacy[legacy["pair_type"] != "edge"]
     hardened = pd.DataFrame(build_hardened_edges(
         returns, core_nodes, core_edges, iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED))
-    combined = pd.concat([non_edge, hardened], ignore_index=True)
-    con.register("ll", combined)
-    con.execute("CREATE OR REPLACE TABLE leadlag AS SELECT * FROM ll")
-    con.unregister("ll")
+    return pd.concat([non_edge, hardened], ignore_index=True)
+
+
+def compute_h1(
+    core_fund: pd.DataFrame, core_nodes: pd.DataFrame, core_edges: pd.DataFrame
+) -> pd.DataFrame:
     from analysis.fundamentals_leadlag import capex_revenue_edges
-    h1 = capex_revenue_edges(core_fund, core_nodes, core_edges,
-                             iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
-    con.register("h1t", h1)
-    con.execute("CREATE OR REPLACE TABLE fundamentals_leadlag AS SELECT * FROM h1t")
-    con.unregister("h1t")
-    print(f"fundamentals_leadlag: wrote {len(h1)} capex->revenue edge rows")
+
+    return capex_revenue_edges(core_fund, core_nodes, core_edges,
+                               iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+
+
+def compute_h5(
+    core_fund: pd.DataFrame,
+    returns: pd.DataFrame,
+    factors: dict[str, pd.Series],
+    core_nodes: pd.DataFrame,
+    core_edges: pd.DataFrame,
+) -> pd.DataFrame:
     from analysis.capex_price import capex_price_edges
-    _ret = {
-        t: g.set_index("date")["log_return"].sort_index()
-        for t, g in returns.groupby("ticker")
-    }
-    _factors = {etf: _ret[etf] for etf in FACTOR_TICKERS.values() if etf in _ret}
-    h5 = capex_price_edges(
+
+    return capex_price_edges(
         core_fund,
         returns,
-        _factors,
+        factors,
         core_nodes,
         core_edges,
         horizons=H5_FORWARD_HORIZONS,
         iters=BOOTSTRAP_ITERS,
         seed=RANDOM_SEED,
     )
-    con.register("h5t", h5)
-    con.execute("CREATE OR REPLACE TABLE capex_price AS SELECT * FROM h5t")
-    con.unregister("h5t")
-    print(f"capex_price: wrote {len(h5)} capex->price edge rows")
-    from analysis.networking_signal import networking_propagation, networking_pricing
-    h11 = networking_propagation(fundamentals, nodes, edges,
-                                 iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
-    con.register("h11t", h11)
-    con.execute("CREATE OR REPLACE TABLE networking_propagation AS SELECT * FROM h11t")
-    con.unregister("h11t")
-    print(f"networking_propagation: wrote {len(h11)} capex->revenue edge rows")
-    h12 = networking_pricing(fundamentals, returns, _factors, nodes, edges,
-                             horizons=H5_FORWARD_HORIZONS,
-                             iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
-    con.register("h12t", h12)
-    con.execute("CREATE OR REPLACE TABLE networking_pricing AS SELECT * FROM h12t")
-    con.unregister("h12t")
-    print(f"networking_pricing: wrote {len(h12)} capex->price edge rows")
+
+
+def compute_h11(
+    fundamentals: pd.DataFrame, nodes: pd.DataFrame, edges: pd.DataFrame
+) -> pd.DataFrame:
+    from analysis.networking_signal import networking_propagation
+
+    return networking_propagation(fundamentals, nodes, edges,
+                                  iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+
+
+def compute_h12(
+    fundamentals: pd.DataFrame,
+    returns: pd.DataFrame,
+    factors: dict[str, pd.Series],
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+) -> pd.DataFrame:
+    from analysis.networking_signal import networking_pricing
+
+    return networking_pricing(fundamentals, returns, factors, nodes, edges,
+                              horizons=H5_FORWARD_HORIZONS,
+                              iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+
+
+def compute_h15(
+    returns: pd.DataFrame, nodes: pd.DataFrame, edges: pd.DataFrame
+) -> pd.DataFrame:
     from analysis.link_momentum import (
         link_backtest,
         link_predictability,
@@ -567,24 +640,30 @@ def run() -> None:  # pragma: no cover
         residual_monthly_returns,
     )
     from config import H15_MIN_MONTHS
-    _monthly = monthly_returns(returns)
-    _resid_m = residual_monthly_returns(_monthly, nodes)
-    _panel = link_signal_panel(_resid_m, nodes, edges, min_months=H15_MIN_MONTHS)
-    _pred = link_predictability(_panel, iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+
+    monthly = monthly_returns(returns)
+    resid_m = residual_monthly_returns(monthly, nodes)
+    panel = link_signal_panel(resid_m, nodes, edges, min_months=H15_MIN_MONTHS)
+    pred = link_predictability(panel, iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
     # Backtest is gated: a null card carries no long-short result.
-    _gated = (_pred["slope"] > 0) and (_pred["slope_lo"] > 0)
-    _bt = link_backtest(_panel, _monthly) if _gated else {}
-    h15 = pd.DataFrame([{**_pred, **_bt, "gated": bool(_gated)}])
-    con.register("h15t", h15)
-    con.execute("CREATE OR REPLACE TABLE link_momentum AS SELECT * FROM h15t")
-    con.unregister("h15t")
-    print(f"link_momentum: slope={_pred['slope']:.4f} p={_pred['p_value']:.3f} "
-          f"oos={_pred['oos_sign_rate']:.2f} gated={_gated}")
+    gated = (pred["slope"] > 0) and (pred["slope_lo"] > 0)
+    bt = link_backtest(panel, monthly) if gated else {}
+    return pd.DataFrame([{**pred, **bt, "gated": bool(gated)}])
+
+
+def compute_h2(
+    core_fund: pd.DataFrame,
+    returns: pd.DataFrame,
+    factors: dict[str, pd.Series],
+    core_nodes: pd.DataFrame,
+    core_edges: pd.DataFrame,
+) -> pd.DataFrame:
     from analysis.event_drift import event_drift
+
     h2 = event_drift(
         core_fund,
         returns,
-        _factors,
+        factors,
         core_nodes,
         core_edges,
         horizons=H2_DRIFT_HORIZONS,
@@ -594,136 +673,323 @@ def run() -> None:  # pragma: no cover
     )
     h2df = pd.DataFrame([h2])
     h2df["q_value"] = h2df["p_selection"]
-    con.register("h2t", h2df)
-    con.execute("CREATE OR REPLACE TABLE event_drift AS SELECT * FROM h2t")
-    con.unregister("h2t")
-    print(f"event_drift: pooled slope={h2['slope']:.4f} n={h2['n_events']}")
-    try:
-        vol = con.execute("SELECT series, date, close FROM vol_indices").fetchdf()
-    except duckdb.CatalogException:
-        vol = pd.DataFrame(columns=["series", "date", "close"])
-    if len(vol):
-        from analysis.vol_premium import vol_premium_table
-        from analysis.vol_termstructure import vol_termstructure_table
-        from config import H6_PAIRS, H6_RV_HORIZON, H7_HORIZONS, H7_PREDICTOR, H7_TARGETS
+    return h2df
 
-        h6 = vol_premium_table(
-            vol,
-            returns,
-            pairs=H6_PAIRS,
-            horizon=H6_RV_HORIZON,
-            iters=BOOTSTRAP_ITERS,
-            seed=RANDOM_SEED,
-        )
-        con.register("h6t", h6)
-        con.execute("CREATE OR REPLACE TABLE vol_premium AS SELECT * FROM h6t")
-        con.unregister("h6t")
-        print(f"vol_premium: wrote {len(h6)} VRP pair rows")
 
-        h7 = vol_termstructure_table(
-            vol,
-            returns,
-            predictor=H7_PREDICTOR,
-            targets=H7_TARGETS,
-            horizons=H7_HORIZONS,
-            iters=BOOTSTRAP_ITERS,
-            seed=RANDOM_SEED,
-        )
-        con.register("h7t", h7)
-        con.execute("CREATE OR REPLACE TABLE vol_termstructure AS SELECT * FROM h7t")
-        con.unregister("h7t")
-        print(f"vol_termstructure: wrote {len(h7)} target x horizon rows")
+def compute_h6(vol: pd.DataFrame, returns: pd.DataFrame) -> pd.DataFrame:
+    from analysis.vol_premium import vol_premium_table
+    from config import H6_PAIRS, H6_RV_HORIZON
 
-    from config import (
-        CLOUD_MARGIN_NAMES,
-        H4_HORIZON_MONTHS,
-        H9_LEAD_QUARTERS,
-        H10_HORIZON_MONTHS,
-        H8_LEAD_QUARTERS,
-        INDICATOR_PUB_LAG_MONTHS,
-        LEADING_INDICATORS,
-        POWER_DEMAND_SERIES,
-        POWER_NAMES,
-        POWER_PRICE_SERIES,
-        SEMIS_REVENUE_NAMES,
+    return vol_premium_table(
+        vol,
+        returns,
+        pairs=H6_PAIRS,
+        horizon=H6_RV_HORIZON,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
     )
 
-    present = set(macro["series_id"].unique()) if len(macro) else set()
-    indicators = tuple(sid for sid in LEADING_INDICATORS if sid in present)
+
+def compute_h7(vol: pd.DataFrame, returns: pd.DataFrame) -> pd.DataFrame:
+    from analysis.vol_termstructure import vol_termstructure_table
+    from config import H7_HORIZONS, H7_PREDICTOR, H7_TARGETS
+
+    return vol_termstructure_table(
+        vol,
+        returns,
+        predictor=H7_PREDICTOR,
+        targets=H7_TARGETS,
+        horizons=H7_HORIZONS,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
+    )
+
+
+def compute_h8(
+    macro: pd.DataFrame, fundamentals: pd.DataFrame, indicators: tuple[str, ...]
+) -> pd.DataFrame:
+    from analysis.leading_indicators import leading_revenue_table
+    from config import H8_LEAD_QUARTERS, INDICATOR_PUB_LAG_MONTHS, SEMIS_REVENUE_NAMES
+
+    return leading_revenue_table(
+        macro,
+        fundamentals,
+        indicators=indicators,
+        names=SEMIS_REVENUE_NAMES,
+        leads=H8_LEAD_QUARTERS,
+        pub_lag=INDICATOR_PUB_LAG_MONTHS,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
+    )
+
+
+def compute_h4(
+    macro: pd.DataFrame, returns: pd.DataFrame, indicators: tuple[str, ...]
+) -> pd.DataFrame:
+    from analysis.macro_sector import macro_sector_table
+    from config import H4_HORIZON_MONTHS, INDICATOR_PUB_LAG_MONTHS
+
+    return macro_sector_table(
+        macro,
+        returns,
+        indicators=indicators,
+        target="SOXX",
+        horizons=H4_HORIZON_MONTHS,
+        pub_lag=INDICATOR_PUB_LAG_MONTHS,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
+    )
+
+
+def compute_h9(macro: pd.DataFrame, fundamentals: pd.DataFrame) -> pd.DataFrame:
+    from analysis.power_margins import power_margins_table
+    from config import (
+        CLOUD_MARGIN_NAMES,
+        H9_LEAD_QUARTERS,
+        INDICATOR_PUB_LAG_MONTHS,
+        POWER_PRICE_SERIES,
+    )
+
+    return power_margins_table(
+        macro,
+        fundamentals,
+        price_series=POWER_PRICE_SERIES,
+        names=CLOUD_MARGIN_NAMES,
+        leads=H9_LEAD_QUARTERS,
+        pub_lag=INDICATOR_PUB_LAG_MONTHS,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
+    )
+
+
+def compute_h10(
+    macro: pd.DataFrame, returns: pd.DataFrame, present_names: set[str]
+) -> pd.DataFrame:
+    from analysis.power_demand import power_demand_table
+    from config import (
+        H10_HORIZON_MONTHS,
+        INDICATOR_PUB_LAG_MONTHS,
+        POWER_DEMAND_SERIES,
+        POWER_NAMES,
+    )
+
+    return power_demand_table(
+        macro,
+        returns,
+        demand_series=POWER_DEMAND_SERIES,
+        names=[name for name in POWER_NAMES if name in present_names],
+        horizons=H10_HORIZON_MONTHS,
+        pub_lag=INDICATOR_PUB_LAG_MONTHS,
+        iters=BOOTSTRAP_ITERS,
+        seed=RANDOM_SEED,
+    )
+
+
+def _write_leadlag_table(
+    con,
+    returns: pd.DataFrame,
+    macro: pd.DataFrame,
+    core_nodes: pd.DataFrame,
+    core_edges: pd.DataFrame,
+    core_fund: pd.DataFrame,
+) -> str:
+    from contextlib import redirect_stdout
+    from io import StringIO
+
+    combined = compute_leadlag(returns, macro, core_nodes, core_edges, core_fund)
+    leadlag_non_edge_count = len(combined[combined["pair_type"] != "edge"])
+    leadlag_edge_count = len(combined[combined["pair_type"] == "edge"])
+    leadlag_stdout = StringIO()
+    with redirect_stdout(leadlag_stdout):
+        _write_table(
+            con,
+            "leadlag",
+            combined,
+            f"leadlag: {leadlag_non_edge_count} non-edge + "
+            f"{leadlag_edge_count} hardened edge rows",
+        )
+    return leadlag_stdout.getvalue()
+
+
+def _write_capex_networking_tables(
+    con,
+    returns: pd.DataFrame,
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+    core_nodes: pd.DataFrame,
+    core_edges: pd.DataFrame,
+    core_fund: pd.DataFrame,
+) -> dict[str, pd.Series]:
+    h1 = compute_h1(core_fund, core_nodes, core_edges)
+    _write_table(
+        con,
+        "fundamentals_leadlag",
+        h1,
+        f"fundamentals_leadlag: wrote {len(h1)} capex->revenue edge rows",
+    )
+
+    factors = _factor_returns(returns)
+    h5 = compute_h5(core_fund, returns, factors, core_nodes, core_edges)
+    _write_table(
+        con,
+        "capex_price",
+        h5,
+        f"capex_price: wrote {len(h5)} capex->price edge rows",
+    )
+
+    h11 = compute_h11(fundamentals, nodes, edges)
+    _write_table(
+        con,
+        "networking_propagation",
+        h11,
+        f"networking_propagation: wrote {len(h11)} capex->revenue edge rows",
+    )
+
+    h12 = compute_h12(fundamentals, returns, factors, nodes, edges)
+    _write_table(
+        con,
+        "networking_pricing",
+        h12,
+        f"networking_pricing: wrote {len(h12)} capex->price edge rows",
+    )
+    return factors
+
+
+def _write_momentum_event_tables(
+    con,
+    returns: pd.DataFrame,
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    factors: dict[str, pd.Series],
+    core_fund: pd.DataFrame,
+    core_nodes: pd.DataFrame,
+    core_edges: pd.DataFrame,
+) -> None:
+
+    h15 = compute_h15(returns, nodes, edges)
+    h15_row = h15.iloc[0]
+    _write_table(
+        con,
+        "link_momentum",
+        h15,
+        f"link_momentum: slope={h15_row['slope']:.4f} p={h15_row['p_value']:.3f} "
+        f"oos={h15_row['oos_sign_rate']:.2f} gated={h15_row['gated']}",
+    )
+
+    h2df = compute_h2(core_fund, returns, factors, core_nodes, core_edges)
+    h2_row = h2df.iloc[0]
+    _write_table(
+        con,
+        "event_drift",
+        h2df,
+        f"event_drift: pooled slope={h2_row['slope']:.4f} n={h2_row['n_events']}",
+    )
+
+
+def _write_vol_tables(con, vol: pd.DataFrame, returns: pd.DataFrame) -> None:
+    if len(vol):
+        h6 = compute_h6(vol, returns)
+        _write_table(
+            con,
+            "vol_premium",
+            h6,
+            f"vol_premium: wrote {len(h6)} VRP pair rows",
+        )
+
+        h7 = compute_h7(vol, returns)
+        _write_table(
+            con,
+            "vol_termstructure",
+            h7,
+            f"vol_termstructure: wrote {len(h7)} target x horizon rows",
+        )
+
+
+def _write_indicator_tables(
+    con,
+    macro: pd.DataFrame,
+    returns: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+    indicators: tuple[str, ...],
+) -> None:
     if indicators and len(fundamentals):
-        from analysis.leading_indicators import leading_revenue_table
-
-        h8 = leading_revenue_table(
-            macro,
-            fundamentals,
-            indicators=indicators,
-            names=SEMIS_REVENUE_NAMES,
-            leads=H8_LEAD_QUARTERS,
-            pub_lag=INDICATOR_PUB_LAG_MONTHS,
-            iters=BOOTSTRAP_ITERS,
-            seed=RANDOM_SEED,
+        h8 = compute_h8(macro, fundamentals, indicators)
+        _write_table(
+            con,
+            "leading_revenue",
+            h8,
+            f"leading_revenue: wrote {len(h8)} indicator rows",
         )
-        con.register("h8t", h8)
-        con.execute("CREATE OR REPLACE TABLE leading_revenue AS SELECT * FROM h8t")
-        con.unregister("h8t")
-        print(f"leading_revenue: wrote {len(h8)} indicator rows")
     if indicators and "SOXX" in set(returns["ticker"].unique()):
-        from analysis.macro_sector import macro_sector_table
-
-        h4 = macro_sector_table(
-            macro,
-            returns,
-            indicators=indicators,
-            target="SOXX",
-            horizons=H4_HORIZON_MONTHS,
-            pub_lag=INDICATOR_PUB_LAG_MONTHS,
-            iters=BOOTSTRAP_ITERS,
-            seed=RANDOM_SEED,
+        h4 = compute_h4(macro, returns, indicators)
+        _write_table(
+            con,
+            "macro_sector",
+            h4,
+            f"macro_sector: wrote {len(h4)} indicator x horizon rows",
         )
-        con.register("h4t", h4)
-        con.execute("CREATE OR REPLACE TABLE macro_sector AS SELECT * FROM h4t")
-        con.unregister("h4t")
-        print(f"macro_sector: wrote {len(h4)} indicator x horizon rows")
+
+
+def _write_power_tables(
+    con,
+    macro: pd.DataFrame,
+    returns: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+    present: set[str],
+) -> None:
+    from config import POWER_DEMAND_SERIES, POWER_NAMES, POWER_PRICE_SERIES
+
     if any(sid in present for sid in POWER_PRICE_SERIES) and len(fundamentals):
-        from analysis.power_margins import power_margins_table
-
-        h9 = power_margins_table(
-            macro,
-            fundamentals,
-            price_series=POWER_PRICE_SERIES,
-            names=CLOUD_MARGIN_NAMES,
-            leads=H9_LEAD_QUARTERS,
-            pub_lag=INDICATOR_PUB_LAG_MONTHS,
-            iters=BOOTSTRAP_ITERS,
-            seed=RANDOM_SEED,
-        )
-        con.register("h9t", h9)
-        con.execute("CREATE OR REPLACE TABLE power_margins AS SELECT * FROM h9t")
-        con.unregister("h9t")
-        print(f"power_margins: wrote {len(h9)} price rows")
+        h9 = compute_h9(macro, fundamentals)
+        _write_table(con, "power_margins", h9, f"power_margins: wrote {len(h9)} price rows")
     present_names = set(returns["ticker"].unique()) if len(returns) else set()
     if (
         any(sid in present for sid in POWER_DEMAND_SERIES)
         and any(name in present_names for name in POWER_NAMES)
     ):
-        from analysis.power_demand import power_demand_table
-
-        h10 = power_demand_table(
-            macro,
-            returns,
-            demand_series=POWER_DEMAND_SERIES,
-            names=[name for name in POWER_NAMES if name in present_names],
-            horizons=H10_HORIZON_MONTHS,
-            pub_lag=INDICATOR_PUB_LAG_MONTHS,
-            iters=BOOTSTRAP_ITERS,
-            seed=RANDOM_SEED,
+        h10 = compute_h10(macro, returns, present_names)
+        _write_table(
+            con,
+            "power_demand",
+            h10,
+            f"power_demand: wrote {len(h10)} (name x horizon) rows",
         )
-        con.register("h10t", h10)
-        con.execute("CREATE OR REPLACE TABLE power_demand AS SELECT * FROM h10t")
-        con.unregister("h10t")
-        print(f"power_demand: wrote {len(h10)} (name x horizon) rows")
+
+
+def run() -> None:  # pragma: no cover
+    import duckdb
+
+    from config import LEADING_INDICATORS
+
+    con = duckdb.connect(str(DUCKDB_PATH))
+    (
+        returns,
+        macro,
+        nodes,
+        edges,
+        fundamentals,
+        vol,
+        core_nodes,
+        core_edges,
+        core_fund,
+    ) = _load_inputs(con)
+    leadlag_output = _write_leadlag_table(
+        con, returns, macro, core_nodes, core_edges, core_fund
+    )
+    factors = _write_capex_networking_tables(
+        con, returns, nodes, edges, fundamentals, core_nodes, core_edges, core_fund
+    )
+    _write_momentum_event_tables(
+        con, returns, nodes, edges, factors, core_fund, core_nodes, core_edges
+    )
+    present = set(macro["series_id"].unique()) if len(macro) else set()
+    indicators = tuple(sid for sid in LEADING_INDICATORS if sid in present)
+    _write_vol_tables(con, vol, returns)
+    _write_indicator_tables(con, macro, returns, fundamentals, indicators)
+    _write_power_tables(con, macro, returns, fundamentals, present)
     con.close()
-    print(f"leadlag: {len(non_edge)} non-edge + {len(hardened)} hardened edge rows")
+    print(leadlag_output, end="")
 
 
 if __name__ == "__main__":

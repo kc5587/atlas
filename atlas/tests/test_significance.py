@@ -76,6 +76,21 @@ def test_null_cross_corr_centered_on_zero():
     assert out["p_selection"] > 0.1  # nothing real => not significant
 
 
+def test_selection_aware_nonfinite_observed_corr_is_null():
+    left = np.ones(80)
+    right = np.ones(80)
+
+    for method in ("block", "rotate"):
+        out = selection_aware(
+            left, right, lag_min=1, lag_max=5, iters=100, seed=5, method=method
+        )
+        assert out["lag"] == 0
+        assert np.isnan(out["corr"])
+        assert out["p_selection"] == 1.0
+        assert out["contradicts_thesis"] is False
+        assert out["inverse_lead"] is False
+
+
 def test_auto_block_length_handles_highly_persistent_series():
     # Regression: a strongly autocorrelated series (e.g. H6's overlapping realized-
     # variance VRP) pushes the flat-top bandwidth M=2m past the computed autocorr

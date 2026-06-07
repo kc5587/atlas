@@ -33,10 +33,11 @@ PRICE_START = "2010-01-01"
 MAX_LAG_DAYS = 20
 PRICE_NMIN = 250
 MACRO_NMIN = 36
-TRAILING_YEARS = 3
 BOOTSTRAP_ITERS = 1000
 BOOTSTRAP_BLOCK = 20
 FDR_ALPHA = 0.10
+OOS_SIGN_FLOOR = 0.6  # min OOS sign-retention for a "confirmed" timing verdict
+SUGGESTIVE_Q = 0.25  # relaxed q threshold for the weaker "suggestive" tier
 RANDOM_SEED = 7
 
 # Layer 2: SEC EDGAR fundamentals.
@@ -82,7 +83,6 @@ OOS_INIT_TRAIN_FRAC = 0.5
 OOS_EMBARGO_DAYS = MAX_LAG_DAYS
 OOS_MIN_FOLDS = 3
 OOS_SIGN_RATE_FLOOR = 0.6        # descriptive heuristic, NOT a significance test
-LEAVE_ONE_OUT_WEIGHT = 0.10      # ETF-weight threshold for leave-one-out variant
 
 # H15 link-momentum: min monthly history per testable node + monthly walk-forward.
 H15_MIN_MONTHS = 36

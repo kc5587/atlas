@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from analysis.leadlag import (
+    _stable_across_halves,
     align_pair,
     bh_fdr,
     build_hardened_edges,
@@ -16,6 +17,7 @@ from analysis.leadlag import (
 )
 from analysis.residualize import residual_for_spec
 from analysis.significance import auto_block_length
+from analysis.significance import _corr_at_lag
 
 
 def _returns_df():
@@ -60,6 +62,49 @@ def test_real_lead_lag_confirmed_and_correct_direction():
         assert r["lag"] >= 1
         assert r["m"] == 1
         assert r["contradicts_thesis"] is False
+
+
+def test_hardened_corr_raw_uses_selected_lag_not_minimum_lag():
+    returns = _returns_df()
+    nodes, edges = _nodes_edges()
+    rows = build_hardened_edges(returns, nodes, edges, iters=200, seed=7)
+    row = rows[0]
+    assert row["lag"] != 1
+
+    ret = {t: g.set_index("date")["log_return"] for t, g in returns.groupby("ticker")}
+    left, right = align_pair(ret["UP"], ret["DOWN"])
+    expected = _corr_at_lag(left.to_numpy(), right.to_numpy(), row["lag"])
+    wrong_lag = _corr_at_lag(left.to_numpy(), right.to_numpy(), 1)
+
+    assert np.isclose(row["corr_raw"], expected)
+    assert not np.isclose(row["corr_raw"], wrong_lag)
+
+
+def _half_lagged_pair(first_lag: int, second_lag: int) -> tuple[pd.Series, pd.Series]:
+    rng = np.random.default_rng(31)
+    half = 80
+    left = rng.standard_normal(half * 2)
+    right = rng.standard_normal(half * 2)
+    for start, lag in ((0, first_lag), (half, second_lag)):
+        stop = start + half
+        if lag >= 0:
+            right[start + lag:stop] = left[start:stop - lag] + 0.01 * rng.standard_normal(half - lag)
+        else:
+            lead = abs(lag)
+            left[start + lead:stop] = right[start:stop - lead] + 0.01 * rng.standard_normal(half - lead)
+    idx = pd.date_range("2020-01-01", periods=half * 2, freq="B")
+    return pd.Series(left, index=idx), pd.Series(right, index=idx)
+
+
+def test_stable_across_halves_requires_close_lags_and_matching_corr_signs():
+    left, right = _half_lagged_pair(1, 20)
+    assert _stable_across_halves(left, right, 20) is False
+
+    left, right = _half_lagged_pair(3, 4)
+    assert _stable_across_halves(left, right, 3) is True
+
+    left, right = _half_lagged_pair(3, -3)
+    assert _stable_across_halves(left, right, 3) is False
 
 
 def test_bh_fdr_monotone():

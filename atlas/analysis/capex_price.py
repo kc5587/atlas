@@ -13,7 +13,7 @@ import pandas as pd
 
 from analysis.fundamentals_leadlag import bootstrap_slope_ci, yoy_growth
 from analysis.residualize import residual_for_spec
-from analysis.significance import block_resample_one
+from analysis.significance import block_resample_one, corr_slope as _corr_slope
 
 
 def forward_excess_return(
@@ -54,14 +54,6 @@ def capex_growth_at_filed(fundamentals: pd.DataFrame, ticker: str) -> pd.Series:
     growth = yoy_growth(level)
     filed_idx = pd.DatetimeIndex([filed_by_q.loc[qi] for qi in growth.index])
     return pd.Series(growth.to_numpy(), index=filed_idx).sort_index()
-
-
-def _corr_slope(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-    if len(x) < 3 or np.std(x) == 0 or np.std(y) == 0:
-        return np.nan, np.nan
-    corr = float(np.corrcoef(x, y)[0, 1])
-    slope = float(np.polyfit(x, y, 1)[0])
-    return corr, slope
 
 
 def _aligned_forward(

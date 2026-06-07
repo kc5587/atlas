@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+import analysis.leadlag as leadlag_module
 from analysis.leadlag import (
     align_pair,
     bh_fdr,
@@ -48,6 +49,15 @@ def test_bh_fdr_monotone():
     assert q[0] <= q[-1]
 
 
+def test_bh_fdr_ignores_nan_pvalues():
+    p = np.array([0.01, np.nan, 0.03, 0.20])
+    q = bh_fdr(p)
+    expected = bh_fdr(np.array([0.01, 0.03, 0.20]))
+
+    assert np.isnan(q[1])
+    np.testing.assert_allclose(q[[0, 2, 3]], expected)
+
+
 def test_bootstrap_pvalue_in_unit_interval():
     rng = np.random.default_rng(1)
     n = 300
@@ -83,6 +93,44 @@ def test_build_leadlag_table_price_pairs(tmp_path):
     assert set(["pair_type", "left", "right", "lag", "corr", "p_value", "q_value", "n_eff", "stable"]).issubset(table.columns)
     assert (table["pair_type"] == "edge").any()
     assert (table["q_value"] <= 1.0).all()
+
+
+def test_build_leadlag_table_applies_fdr_per_pair_type(monkeypatch):
+    strong_rows = [
+        {"pair_type": "fund_capex_rev", "left": "a", "right": "b", "lag": 1,
+         "corr": 0.5, "p_value": 0.01, "q_value": np.nan, "n_eff": 20, "stable": True},
+        {"pair_type": "fund_capex_rev", "left": "c", "right": "d", "lag": 1,
+         "corr": 0.4, "p_value": 0.02, "q_value": np.nan, "n_eff": 20, "stable": True},
+        {"pair_type": "fund_capex_rev", "left": "e", "right": "f", "lag": 1,
+         "corr": np.nan, "p_value": np.nan, "q_value": np.nan, "n_eff": 0, "stable": False},
+    ]
+    weak_rows = [
+        {"pair_type": "fund_capex_price", "left": "g", "right": "h", "lag": 1,
+         "corr": 0.1, "p_value": 0.80, "q_value": np.nan, "n_eff": 20, "stable": False},
+        {"pair_type": "fund_capex_price", "left": "i", "right": "j", "lag": 1,
+         "corr": 0.1, "p_value": 0.90, "q_value": np.nan, "n_eff": 20, "stable": False},
+    ]
+    monkeypatch.setattr(leadlag_module, "_fund_capex_revenue_rows", lambda *_, **__: strong_rows)
+    monkeypatch.setattr(leadlag_module, "_fund_capex_price_rows", lambda *_, **__: weak_rows)
+
+    table = build_leadlag_table(
+        pd.DataFrame(columns=["ticker", "date", "log_return"]),
+        pd.DataFrame(columns=["series_id", "date", "value"]),
+        pd.DataFrame({"id": ["a"], "tickers": ['["A"]']}),
+        pd.DataFrame({"from_id": ["a"], "to_id": ["b"]}),
+        fundamentals=pd.DataFrame({"ticker": ["A"], "filed": [pd.Timestamp("2024-01-01")]}),
+    )
+
+    strong = table["pair_type"] == "fund_capex_rev"
+    weak = table["pair_type"] == "fund_capex_price"
+    np.testing.assert_allclose(
+        table.loc[strong & table["p_value"].notna(), "q_value"],
+        bh_fdr(np.array([0.01, 0.02])),
+    )
+    assert table.loc[strong & table["p_value"].isna(), "q_value"].isna().all()
+    np.testing.assert_allclose(table.loc[weak, "q_value"], bh_fdr(np.array([0.80, 0.90])))
+
+
 def test_infer_period_freq_monthly():
     idx = pd.date_range("2015-01-31", periods=24, freq="ME")
     assert infer_period_freq(idx) == "ME"
