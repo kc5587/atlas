@@ -1,7 +1,12 @@
 import numpy as np
 import pandas as pd
 
-from analysis.link_momentum import link_signal_panel, monthly_returns, residual_monthly_returns
+from analysis.link_momentum import (
+    link_predictability,
+    link_signal_panel,
+    monthly_returns,
+    residual_monthly_returns,
+)
 
 _NODES = pd.DataFrame([
     {"id": "nvidia", "tickers": '["NVDA"]', "stage": "chips"},
@@ -61,3 +66,37 @@ def test_link_signal_panel_builds_customer_signal_and_forward_target():
     assert abs(row["signal"] - np.mean([0.02, 0.00])) < 1e-9
     assert abs(row["fwd_target"] - 0.1) < 1e-9
     assert panel["month"].max() < idx[-1]
+
+
+def _panel_with_signal(beta, n_nodes=8, n_months=60, noise=0.02, seed=0):
+    rng = np.random.default_rng(seed)
+    months = pd.date_range("2016-01-31", periods=n_months, freq="ME")
+    rows = []
+    for k in range(n_nodes):
+        signal = rng.normal(0, 0.03, n_months)
+        target = beta * signal + rng.normal(0, noise, n_months)
+        rows.extend(
+            {
+                "node": f"n{k}",
+                "month": month,
+                "signal": signal[i],
+                "fwd_target": target[i],
+            }
+            for i, month in enumerate(months)
+        )
+    return pd.DataFrame(rows)
+
+
+def test_link_predictability_detects_positive_slope():
+    out = link_predictability(_panel_with_signal(0.5), iters=300, seed=1)
+
+    assert out["slope"] > 0
+    assert out["p_value"] < 0.05
+    assert 0.0 <= out["oos_sign_rate"] <= 1.0
+    assert out["n_obs"] == 8 * 60
+
+
+def test_link_predictability_null_on_noise():
+    out = link_predictability(_panel_with_signal(0.0), iters=300, seed=2)
+
+    assert out["p_value"] > 0.05
