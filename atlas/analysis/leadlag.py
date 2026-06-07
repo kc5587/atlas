@@ -130,12 +130,18 @@ def stationary_bootstrap_pvalue(
 def bh_fdr(pvalues: np.ndarray) -> np.ndarray:
     """Benjamini-Hochberg adjusted q-values."""
     p = np.asarray(pvalues, dtype=float)
-    n = len(p)
-    order = np.argsort(p)
-    ranked = p[order] * n / (np.arange(n) + 1)
+    q = np.full(len(p), np.nan, dtype=float)
+    finite = np.isfinite(p)
+    if not finite.any():
+        return q
+    valid = p[finite]
+    n = len(valid)
+    order = np.argsort(valid)
+    ranked = valid[order] * n / (np.arange(n) + 1)
     q_sorted = np.minimum.accumulate(ranked[::-1])[::-1]
-    q = np.empty(n)
-    q[order] = np.clip(q_sorted, 0, 1)
+    q_valid = np.empty(n)
+    q_valid[order] = np.clip(q_sorted, 0, 1)
+    q[finite] = q_valid
     return q
 
 
@@ -415,7 +421,13 @@ def build_leadlag_table(
 
     df = pd.DataFrame(rows, columns=_LEADLAG_COLUMNS)
     if not df.empty:
-        df["q_value"] = bh_fdr(df["p_value"].to_numpy())
+        family_cols = [c for c in ("pair_type", "family", "factor_model") if c in df.columns]
+        if family_cols:
+            by = family_cols[0] if len(family_cols) == 1 else family_cols
+            for _, idx in df.groupby(by, sort=False).groups.items():
+                df.loc[idx, "q_value"] = bh_fdr(df.loc[idx, "p_value"].to_numpy())
+        else:
+            df["q_value"] = bh_fdr(df["p_value"].to_numpy())
     return df
 
 

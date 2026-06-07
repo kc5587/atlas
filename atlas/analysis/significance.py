@@ -123,6 +123,17 @@ def selection_aware(
     block = block or auto_block_length(right)
 
     lag, corr = _signed_peak(left, right, lag_min, lag_max)
+    if not np.isfinite(corr):
+        return {
+            "lag": 0,
+            "corr": np.nan,
+            "corr_contemporaneous": _corr_at_lag(left, right, 0),
+            "p_selection": 1.0,
+            "block_len": int(block),
+            "best_neg_lag_corr": np.nan,
+            "contradicts_thesis": False,
+            "inverse_lead": False,
+        }
     pos_lags = range(lag_min, lag_max + 1)
     neg_lags = range(-lag_max, -lag_min + 1)
     pos_abs = _abs_peak(left, right, pos_lags)
