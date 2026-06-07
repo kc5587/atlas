@@ -14,12 +14,12 @@ OOS_SIGN_FLOOR = 0.6
 def h0_record(leadlag_edges: pd.DataFrame) -> dict:
     m1 = leadlag_edges[leadlag_edges["factor_model"] == "M1_market"]
     m2 = leadlag_edges[leadlag_edges["factor_model"] == "M2_market_sector"]
-    raw_contemp = float(m1["corr_contemporaneous"].abs().median())
-    resid_contemp = float(m2["corr_contemporaneous"].abs().median())
-    oos = float(m2["oos_sign_rate"].median())
+    raw_contemp = m1["corr_contemporaneous"].abs().median()
+    resid_contemp = m2["corr_contemporaneous"].abs().median()
+    oos = m2["oos_sign_rate"].median()
     confirmed = int(((m2["q_value"] <= FDR_ALPHA) & (m2["oos_sign_rate"] >= OOS_SIGN_FLOOR)
                      & (~m2["contradicts_thesis"])).sum())
-    min_q = float(m2["q_value"].min()) if len(m2) else float("nan")
+    min_q = m2["q_value"].min() if len(m2) else float("nan")
     verdict = "null" if confirmed == 0 else "suggestive"
     detail = m2[["left", "right", "corr_raw", "corr_resid", "lag", "q_value",
                  "oos_sign_rate"]].to_dict("records")
@@ -29,12 +29,12 @@ def h0_record(leadlag_edges: pd.DataFrame) -> dict:
         "mechanism": "If real, fast diffusion — but daily liquid names arbitrage it away",
         "verdict": verdict,
         "evidence_chain": [
-            {"stage": "raw contemporaneous", "metric": "|corr|", "value": round(raw_contemp, 3)},
-            {"stage": "sector de-beta'd", "metric": "|corr|", "value": round(resid_contemp, 3)},
-            {"stage": "OOS sign-retention", "metric": "rate", "value": round(oos, 3)},
+            {"stage": "raw contemporaneous", "metric": "|corr|", "value": _num(raw_contemp)},
+            {"stage": "sector de-beta'd", "metric": "|corr|", "value": _num(resid_contemp)},
+            {"stage": "OOS sign-retention", "metric": "rate", "value": _num(oos)},
         ],
-        "stat": {"name": "edges_confirmed", "value": confirmed,
-                 "q_value": round(min_q, 3), "n": int(len(m2))},
+        "stat": {"name": "edges_confirmed", "value": _num(confirmed, 0),
+                 "q_value": _num(min_q), "n": _num(len(m2), 0)},
         "caveats": ["Daily price→price only; co-moves but does not lead beyond sector beta"],
         "chart": {"type": "edge_corr_bars", "ref": "h0"},
         "detail_rows": detail,

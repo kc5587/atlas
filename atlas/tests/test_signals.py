@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 
 from analysis.signals import build_signal_records, h0_record, h1_record, h2_record, h5_record
@@ -36,6 +38,21 @@ def test_h0_confirmed_when_some_edge_passes():
     rec = h0_record(df)
     assert rec["stat"]["value"] == 1
     assert rec["verdict"] != "null"
+
+
+def test_h0_record_empty_edges_emit_finite_numeric_fields():
+    cols = [
+        "left", "right", "factor_model", "corr_raw", "corr_resid",
+        "corr_contemporaneous", "lag", "q_value", "oos_sign_rate",
+        "contradicts_thesis",
+    ]
+
+    rec = h0_record(pd.DataFrame(columns=cols))
+
+    assert all(math.isfinite(e["value"]) for e in rec["evidence_chain"])
+    assert math.isfinite(rec["stat"]["value"])
+    assert math.isfinite(rec["stat"]["q_value"])
+    assert math.isfinite(rec["stat"]["n"])
 
 
 def _h1_rows():

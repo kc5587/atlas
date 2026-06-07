@@ -34,6 +34,8 @@ from analysis.oos import oos_stability
 from analysis.residualize import residual_for_spec
 from analysis.significance import _corr_at_lag, selection_aware
 
+STABLE_HALF_LAG_TOLERANCE = 2
+
 
 def log_returns(prices: pd.Series) -> pd.Series:
     """Daily log returns; index preserved, first obs dropped."""
@@ -223,17 +225,30 @@ def _returns_on_filed_dates(
 
 
 def _stable_across_halves(left: pd.Series, right: pd.Series, lag: int) -> bool:
+    """Require half-sample peak lags to stay close and corr signs to agree."""
     half = len(left) // 2
     if half < 30:
         return False
-    peaks = []
+    peaks: list[tuple[int, float]] = []
     for sl in (slice(0, half), slice(half, None)):
         t = cross_correlations(left.iloc[sl], right.iloc[sl], max_lag=abs(lag) + 5)
         t = t.dropna(subset=["corr"])
         if t.empty:
             return False
-        peaks.append(int(t.loc[t["corr"].abs().idxmax(), "lag"]))
-    return all(np.sign(p) == np.sign(lag) for p in peaks) if lag != 0 else all(p == 0 for p in peaks)
+        peak = t.loc[t["corr"].abs().idxmax()]
+        peaks.append((int(peak["lag"]), float(peak["corr"])))
+    (lag_h1, corr_h1), (lag_h2, corr_h2) = peaks
+    same_lag_direction = (
+        abs(lag_h1) <= STABLE_HALF_LAG_TOLERANCE
+        and abs(lag_h2) <= STABLE_HALF_LAG_TOLERANCE
+        if lag == 0
+        else np.sign(lag_h1) == np.sign(lag) and np.sign(lag_h2) == np.sign(lag)
+    )
+    return bool(
+        same_lag_direction
+        and abs(lag_h1 - lag_h2) <= STABLE_HALF_LAG_TOLERANCE
+        and np.sign(corr_h1) == np.sign(corr_h2)
+    )
 
 
 def _lagged_arrays(left: pd.Series, right: pd.Series, lag: int) -> tuple[np.ndarray, np.ndarray]:
@@ -456,10 +471,10 @@ def build_hardened_edges(returns, nodes, edges, *, iters, seed) -> list[dict]:
             paired = pd.concat([left.rename("l"), right.rename("r")], axis=1, join="inner").dropna()
             if len(paired) < PRICE_NMIN:
                 continue
-            raw = _corr_at_lag(ret[lt].reindex(paired.index).to_numpy(),
-                               ret[rt].reindex(paired.index).to_numpy(), LAG_MIN)
             sig = selection_aware(paired["l"].to_numpy(), paired["r"].to_numpy(),
                                   lag_min=LAG_MIN, lag_max=LAG_MAX, iters=iters, seed=seed)
+            raw = _corr_at_lag(ret[lt].reindex(paired.index).to_numpy(),
+                               ret[rt].reindex(paired.index).to_numpy(), int(sig["lag"]))
             oos = oos_stability(left, right, lag_min=LAG_MIN, lag_max=LAG_MAX,
                                 test_days=OOS_TEST_DAYS, step_days=OOS_STEP_DAYS,
                                 init_train_frac=OOS_INIT_TRAIN_FRAC, embargo=OOS_EMBARGO_DAYS)
