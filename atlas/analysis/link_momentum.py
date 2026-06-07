@@ -50,3 +50,52 @@ def residual_monthly_returns(monthly: pd.DataFrame, nodes: pd.DataFrame) -> pd.D
             train_index=monthly.index,
         )
     return pd.DataFrame(out)
+
+
+def _ticker_of(nodes: pd.DataFrame, node_id: str) -> str | None:
+    row = nodes.loc[nodes["id"] == node_id]
+    if row.empty:
+        return None
+    return json.loads(row["tickers"].iloc[0])[0]
+
+
+def link_signal_panel(
+    resid: pd.DataFrame,
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    *,
+    min_months: int,
+) -> pd.DataFrame:
+    """Long panel [node, month, signal, fwd_target] for customer->supplier links.
+
+    signal[S,t] = equal-weight mean of S's customers' residual return at t.
+    fwd_target[S,t] = S's residual return at t+1.
+    """
+    rows = []
+    for supplier in nodes["id"]:
+        supplier_ticker = _ticker_of(nodes, supplier)
+        if supplier_ticker is None or supplier_ticker not in resid.columns:
+            continue
+        customers = edges.loc[edges["from_id"] == supplier, "to_id"]
+        customer_tickers = [
+            ticker
+            for ticker in (_ticker_of(nodes, customer) for customer in customers)
+            if ticker and ticker in resid.columns
+        ]
+        if not customer_tickers:
+            continue
+        signal = resid[customer_tickers].mean(axis=1)
+        target = resid[supplier_ticker].shift(-1)
+        paired = pd.concat([signal.rename("signal"), target.rename("fwd_target")], axis=1).dropna()
+        if len(paired) < min_months:
+            continue
+        rows.extend(
+            {
+                "node": supplier,
+                "month": month,
+                "signal": float(row["signal"]),
+                "fwd_target": float(row["fwd_target"]),
+            }
+            for month, row in paired.iterrows()
+        )
+    return pd.DataFrame(rows, columns=["node", "month", "signal", "fwd_target"])
