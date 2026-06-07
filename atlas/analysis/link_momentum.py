@@ -142,38 +142,28 @@ def _oos_sign_rate(panel: pd.DataFrame) -> tuple[float, int]:
     return (float(np.mean(signs)) if signs else 0.0), len(signs)
 
 
-def link_predictability(
+def _empty_predictability() -> dict:
+    return {
+        "slope": float("nan"),
+        "slope_lo": float("nan"),
+        "slope_hi": float("nan"),
+        "p_value": 1.0,
+        "q_value": 1.0,
+        "oos_sign_rate": 0.0,
+        "n_obs": 0,
+        "n_nodes": 0,
+        "n_months": 0,
+        "n_folds": 0,
+    }
+
+
+def _permutation_p_value(
     panel: pd.DataFrame,
+    observed: float,
     *,
-    iters: int = BOOTSTRAP_ITERS,
-    seed: int = RANDOM_SEED,
-) -> dict:
-    """Pooled fwd_target~signal test with CI, circular p-value, and OOS sign rate."""
-    if panel.empty:
-        return {
-            "slope": float("nan"),
-            "slope_lo": float("nan"),
-            "slope_hi": float("nan"),
-            "p_value": 1.0,
-            "q_value": 1.0,
-            "oos_sign_rate": 0.0,
-            "n_obs": 0,
-            "n_nodes": 0,
-            "n_months": 0,
-            "n_folds": 0,
-        }
-
-    signal = panel["signal"].to_numpy()
-    target = panel["fwd_target"].to_numpy()
-    observed = _pooled_slope(signal, target)
-    lo, hi, _ = bootstrap_slope_ci(
-        signal,
-        target,
-        block=auto_block_length(target),
-        iters=iters,
-        seed=seed,
-    )
-
+    iters: int,
+    seed: int,
+) -> float:
     rng = np.random.default_rng(seed)
     null = []
     for _ in range(iters):
@@ -185,18 +175,35 @@ def link_predictability(
             parts.append(shifted)
         permuted = pd.concat(parts)
         null.append(
-            _pooled_slope(
-                permuted["signal"].to_numpy(),
-                permuted["fwd_target"].to_numpy(),
-            )
+            _pooled_slope(permuted["signal"].to_numpy(), permuted["fwd_target"].to_numpy())
         )
     null_values = np.array([value for value in null if np.isfinite(value)])
     if observed > 0:
-        p_value = float((np.sum(null_values >= observed) + 1) / (len(null_values) + 1))
-    else:
-        p_value = float(
-            (np.sum(np.abs(null_values) >= abs(observed)) + 1) / (len(null_values) + 1)
-        )
+        return float((np.sum(null_values >= observed) + 1) / (len(null_values) + 1))
+    return float((np.sum(np.abs(null_values) >= abs(observed)) + 1) / (len(null_values) + 1))
+
+
+def link_predictability(
+    panel: pd.DataFrame,
+    *,
+    iters: int = BOOTSTRAP_ITERS,
+    seed: int = RANDOM_SEED,
+) -> dict:
+    """Pooled fwd_target~signal test with CI, circular p-value, and OOS sign rate."""
+    if panel.empty:
+        return _empty_predictability()
+
+    signal = panel["signal"].to_numpy()
+    target = panel["fwd_target"].to_numpy()
+    observed = _pooled_slope(signal, target)
+    lo, hi, _ = bootstrap_slope_ci(
+        signal,
+        target,
+        block=auto_block_length(target),
+        iters=iters,
+        seed=seed,
+    )
+    p_value = _permutation_p_value(panel, observed, iters=iters, seed=seed)
     sign_rate, n_folds = _oos_sign_rate(panel)
     return {
         "slope": observed,
@@ -239,8 +246,19 @@ def _alpha_tstat(port: pd.Series, factors: pd.DataFrame, *, nw_lag: int = 3) -> 
     return alpha * 12, (alpha / se if se > 0 else float("nan"))
 
 
-def link_backtest(panel: pd.DataFrame, raw_monthly: pd.DataFrame) -> dict:
-    """Equal-weight sign-based L/S of supplier raw forward returns, monthly."""
+def _empty_backtest(n_months_bt: int) -> dict:
+    return {
+        "sharpe": float("nan"),
+        "ann_return": float("nan"),
+        "ann_vol": float("nan"),
+        "alpha": float("nan"),
+        "t_stat": float("nan"),
+        "max_drawdown": 0.0,
+        "n_months_bt": int(n_months_bt),
+    }
+
+
+def _portfolio_returns(panel: pd.DataFrame, raw_monthly: pd.DataFrame) -> pd.Series:
     raw_forward = raw_monthly.shift(-1)
     months = pd.DatetimeIndex(sorted(panel["month"].unique()))
     port = []
@@ -260,19 +278,15 @@ def link_backtest(panel: pd.DataFrame, raw_monthly: pd.DataFrame) -> dict:
             continue
         ret = (np.mean(longs) if longs else 0.0) - (np.mean(shorts) if shorts else 0.0)
         port.append((month, float(ret)))
+    return pd.Series([ret for _, ret in port], index=[month for month, _ in port])
 
-    if len(port) < 6:
-        return {
-            "sharpe": float("nan"),
-            "ann_return": float("nan"),
-            "ann_vol": float("nan"),
-            "alpha": float("nan"),
-            "t_stat": float("nan"),
-            "max_drawdown": 0.0,
-            "n_months_bt": len(port),
-        }
 
-    returns = pd.Series([ret for _, ret in port], index=[month for month, _ in port])
+def link_backtest(panel: pd.DataFrame, raw_monthly: pd.DataFrame) -> dict:
+    """Equal-weight sign-based L/S of supplier raw forward returns, monthly."""
+    returns = _portfolio_returns(panel, raw_monthly)
+    if len(returns) < 6:
+        return _empty_backtest(len(returns))
+
     ann_return = float(returns.mean() * 12)
     ann_vol = float(returns.std(ddof=1) * np.sqrt(12))
     sharpe = float(ann_return / ann_vol) if ann_vol > 0 else float("nan")

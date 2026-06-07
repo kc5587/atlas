@@ -463,6 +463,30 @@ def h10_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def _h15_verdict(slope: float, q_value: float, oos: float, lo: float) -> str:
+    if slope > 0 and q_value <= FDR_ALPHA and oos >= OOS_SIGN_FLOOR:
+        return "confirmed"
+    if slope > 0 and lo > 0:
+        return "suggestive"
+    if slope < 0 and q_value <= FDR_ALPHA:
+        return "contradicts"
+    return "null"
+
+
+def _h15_backtest_detail(row: pd.Series, *, gated: bool) -> list[dict]:
+    if not gated:
+        return []
+    return [{
+        "sharpe": _num(row.get("sharpe")),
+        "ann_return": _num(row.get("ann_return")),
+        "ann_vol": _num(row.get("ann_vol")),
+        "alpha": _num(row.get("alpha")),
+        "t_stat": _num(row.get("t_stat")),
+        "max_drawdown": _num(row.get("max_drawdown")),
+        "n_months": int(row.get("n_months_bt") or row.get("n_months") or 0),
+    }]
+
+
 def h15_record(rows: pd.DataFrame) -> dict:
     """H15: customer-return link momentum into supplier forward returns."""
     row = rows.iloc[0]
@@ -470,28 +494,8 @@ def h15_record(rows: pd.DataFrame) -> dict:
     q_value = float(row["q_value"]) if pd.notna(row["q_value"]) else 1.0
     oos = float(row["oos_sign_rate"]) if pd.notna(row["oos_sign_rate"]) else 0.0
     lo = float(row["slope_lo"]) if pd.notna(row["slope_lo"]) else float("nan")
-    if slope > 0 and q_value <= FDR_ALPHA and oos >= OOS_SIGN_FLOOR:
-        verdict = "confirmed"
-    elif slope > 0 and lo > 0:
-        verdict = "suggestive"
-    elif slope < 0 and q_value <= FDR_ALPHA:
-        verdict = "contradicts"
-    else:
-        verdict = "null"
-
+    verdict = _h15_verdict(slope, q_value, oos, lo)
     gated = bool(row.get("gated", False)) and verdict in ("confirmed", "suggestive")
-    detail = []
-    if gated:
-        detail = [{
-            "sharpe": _num(row.get("sharpe")),
-            "ann_return": _num(row.get("ann_return")),
-            "ann_vol": _num(row.get("ann_vol")),
-            "alpha": _num(row.get("alpha")),
-            "t_stat": _num(row.get("t_stat")),
-            "max_drawdown": _num(row.get("max_drawdown")),
-            "n_months": int(row.get("n_months_bt") or row.get("n_months") or 0),
-        }]
-
     n_nodes = int(row.get("n_nodes") or 0)
     n_months = int(row.get("n_months") or 0)
     return {
@@ -517,7 +521,7 @@ def h15_record(rows: pd.DataFrame) -> dict:
             "De-beta'd M2 returns -> not the H0 sector beta",
         ],
         "chart": {"type": "link_momentum", "ref": "h15"},
-        "detail_rows": detail,
+        "detail_rows": _h15_backtest_detail(row, gated=gated),
     }
 
 
