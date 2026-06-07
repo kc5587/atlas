@@ -121,6 +121,21 @@
       {/each}
     </ul>
   {/if}
+  {#if signal.chart.type === "link_momentum"}
+    <p class="legend">Customers' prior-month residual return → supplier forward return (M2 de-beta'd, walk-forward)</p>
+    {#if signal.detail_rows.length}
+      <ul class="edges">
+        {#each signal.detail_rows as r}
+          <li><span>L/S backtest (gross)</span>
+            <b>Sharpe {Number(r.sharpe).toFixed(2)}</b>
+            <span class="ci">α {Number(r.alpha).toFixed(3)} (t {Number(r.t_stat).toFixed(1)})</span>
+            <span class="lag">maxDD {Number(r.max_drawdown).toFixed(2)} · {r.n_months}m</span></li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="legend">No tradeable edge (test did not survive) - backtest withheld.</p>
+    {/if}
+  {/if}
   {#each signal.caveats as c}<p class="caveat">⚠ {c}</p>{/each}
 </article>
 
