@@ -84,6 +84,11 @@ OOS_MIN_FOLDS = 3
 OOS_SIGN_RATE_FLOOR = 0.6        # descriptive heuristic, NOT a significance test
 LEAVE_ONE_OUT_WEIGHT = 0.10      # ETF-weight threshold for leave-one-out variant
 
+# H15 link-momentum: min monthly history per testable node + monthly walk-forward.
+H15_MIN_MONTHS = 36
+H15_OOS_TEST_MONTHS = 12
+H15_OOS_STEP_MONTHS = 12
+
 # Track 1: options-implied vol. QQQ is VXN's matched underlying (not a chain node).
 AUX_TICKERS: list[str] = ["QQQ"]
 
