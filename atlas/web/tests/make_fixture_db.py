@@ -20,7 +20,7 @@ import duckdb
 # A few nodes across all four stages.
 NODES = [
     ("asml", "ASML", '["ASML"]', "equipment", "NL", ""),
-    ("amat", "Applied Materials", '["AMAT"]', "equipment", "US", ""),
+    ("amat", "Applied Materials", '["AMAT"]', "equipment", "US", "0000006951"),
     ("tsmc", "TSMC", '["TSM"]', "foundry", "TW", ""),
     ("nvidia", "NVIDIA", '["NVDA"]', "chips", "US", "0001045810"),
     ("amd", "AMD", '["AMD"]', "chips", "US", ""),
@@ -53,6 +53,10 @@ FUNDAMENTALS = [
     ("NVDA", "2023-03-31", "2023-05-05", 7192000000.0, 248000000.0, 0.64),
     ("NVDA", "2023-06-30", "2023-08-21", 13507000000.0, 289000000.0, 0.70),
     ("MSFT", "2023-06-30", "2023-07-27", 56189000000.0, 8943000000.0, 0.69),
+    # AMAT is the US-filer node the smoke test clicks: needs a CIK + fundamentals
+    # (with gross margin) so the panel renders the populated state, not the empty one.
+    ("AMAT", "2023-01-29", "2023-02-16", 6741000000.0, 230000000.0, 0.466),
+    ("AMAT", "2023-04-30", "2023-05-18", 6634000000.0, 247000000.0, 0.467),
 ]
 
 
