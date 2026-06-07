@@ -6,7 +6,7 @@ import pandas as pd
 
 from analysis.fundamentals_leadlag import bootstrap_slope_ci
 from analysis.oos import walk_forward_folds
-from analysis.significance import auto_block_length, block_resample_one
+from analysis.significance import auto_block_length, block_resample_one, corr_slope as _corr_slope
 
 
 def termstructure_slope(vix: pd.Series, vix3m: pd.Series) -> pd.Series:
@@ -36,12 +36,6 @@ def aligned_forward(
         xs.append(float(s.iloc[i]))
         ys.append(float(np.sum(window)))
     return np.asarray(xs), np.asarray(ys)
-
-
-def _corr_slope(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-    if len(x) < 3 or np.std(x) == 0 or np.std(y) == 0:
-        return np.nan, np.nan
-    return float(np.corrcoef(x, y)[0, 1]), float(np.polyfit(x, y, 1)[0])
 
 
 def selection_pvalue_one_series(x: np.ndarray, y: np.ndarray, *, iters: int, seed: int) -> float:

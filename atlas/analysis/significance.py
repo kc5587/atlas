@@ -11,6 +11,13 @@ import numpy as np
 from config import BOOTSTRAP_BLOCK
 
 
+def corr_slope(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    """Pearson corr and OLS slope of y on x; NaN/NaN if degenerate (<3 pts or zero var)."""
+    if len(x) < 3 or np.std(x) == 0 or np.std(y) == 0:
+        return np.nan, np.nan
+    return float(np.corrcoef(x, y)[0, 1]), float(np.polyfit(x, y, 1)[0])
+
+
 def _autocorr(x: np.ndarray, max_lag: int) -> np.ndarray:
     x = x - x.mean()
     var = np.dot(x, x)
