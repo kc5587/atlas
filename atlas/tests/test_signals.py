@@ -143,6 +143,8 @@ def test_build_signal_records_appends_h1_when_table_exists():
                 return Result(row=(0,))
             if "table_name='macro_sector'" in sql:
                 return Result(row=(0,))
+            if "table_name='link_momentum'" in sql:
+                return Result(row=(0,))
             if "information_schema.tables" in sql:
                 return Result(row=(1,))
             if "fundamentals_leadlag" in sql:
@@ -151,6 +153,102 @@ def test_build_signal_records_appends_h1_when_table_exists():
 
     records = build_signal_records(Con())
     assert [r["id"] for r in records] == ["H0", "H1"]
+
+
+def test_h15_record_confirmed_includes_backtest():
+    from analysis.signals import h15_record
+
+    row = pd.DataFrame([{
+        "slope": 0.12,
+        "slope_lo": 0.03,
+        "slope_hi": 0.21,
+        "p_value": 0.01,
+        "q_value": 0.01,
+        "oos_sign_rate": 0.72,
+        "n_obs": 480,
+        "n_nodes": 8,
+        "n_months": 60,
+        "n_folds": 4,
+        "gated": True,
+        "sharpe": 0.9,
+        "ann_return": 0.11,
+        "ann_vol": 0.12,
+        "alpha": 0.08,
+        "t_stat": 2.3,
+        "max_drawdown": -0.18,
+        "n_months_bt": 48,
+    }])
+
+    rec = h15_record(row)
+
+    assert rec["id"] == "H15"
+    assert rec["verdict"] == "confirmed"
+    assert rec["chart"]["type"] == "link_momentum"
+    assert any("sharpe" in str(row).lower() for row in rec["detail_rows"])
+
+
+def test_h15_record_null_has_no_backtest_row():
+    from analysis.signals import h15_record
+
+    row = pd.DataFrame([{
+        "slope": 0.01,
+        "slope_lo": -0.05,
+        "slope_hi": 0.07,
+        "p_value": 0.6,
+        "q_value": 0.6,
+        "oos_sign_rate": 0.5,
+        "n_obs": 400,
+        "n_nodes": 8,
+        "n_months": 55,
+        "n_folds": 4,
+        "gated": False,
+    }])
+
+    rec = h15_record(row)
+
+    assert rec["verdict"] == "null"
+    assert rec["detail_rows"] == []
+
+
+def test_build_signal_records_appends_h15_when_table_exists():
+    class Result:
+        def __init__(self, df=None, row=None):
+            self._df = df
+            self._row = row
+
+        def df(self):
+            return self._df
+
+        def fetchone(self):
+            return self._row
+
+    class Con:
+        def execute(self, sql):
+            if "FROM leadlag" in sql:
+                return Result(df=_edges_frame())
+            if "SELECT * FROM link_momentum" in sql:
+                return Result(df=pd.DataFrame([{
+                    "slope": 0.12,
+                    "slope_lo": 0.03,
+                    "slope_hi": 0.21,
+                    "p_value": 0.01,
+                    "q_value": 0.01,
+                    "oos_sign_rate": 0.72,
+                    "n_obs": 480,
+                    "n_nodes": 8,
+                    "n_months": 60,
+                    "n_folds": 4,
+                    "gated": False,
+                }]))
+            if "table_name='link_momentum'" in sql:
+                return Result(row=(1,))
+            if "information_schema.tables" in sql:
+                return Result(row=(0,))
+            raise AssertionError(sql)
+
+    records = build_signal_records(Con())
+
+    assert [record["id"] for record in records] == ["H0", "H15"]
 
 
 def _h5_rows(slope=0.6, q=0.05, contra=False):

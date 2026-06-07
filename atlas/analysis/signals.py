@@ -463,6 +463,64 @@ def h10_record(rows: pd.DataFrame) -> dict:
     }
 
 
+def h15_record(rows: pd.DataFrame) -> dict:
+    """H15: customer-return link momentum into supplier forward returns."""
+    row = rows.iloc[0]
+    slope = float(row["slope"]) if pd.notna(row["slope"]) else float("nan")
+    q_value = float(row["q_value"]) if pd.notna(row["q_value"]) else 1.0
+    oos = float(row["oos_sign_rate"]) if pd.notna(row["oos_sign_rate"]) else 0.0
+    lo = float(row["slope_lo"]) if pd.notna(row["slope_lo"]) else float("nan")
+    if slope > 0 and q_value <= FDR_ALPHA and oos >= OOS_SIGN_FLOOR:
+        verdict = "confirmed"
+    elif slope > 0 and lo > 0:
+        verdict = "suggestive"
+    elif slope < 0 and q_value <= FDR_ALPHA:
+        verdict = "contradicts"
+    else:
+        verdict = "null"
+
+    gated = bool(row.get("gated", False)) and verdict in ("confirmed", "suggestive")
+    detail = []
+    if gated:
+        detail = [{
+            "sharpe": _num(row.get("sharpe")),
+            "ann_return": _num(row.get("ann_return")),
+            "ann_vol": _num(row.get("ann_vol")),
+            "alpha": _num(row.get("alpha")),
+            "t_stat": _num(row.get("t_stat")),
+            "max_drawdown": _num(row.get("max_drawdown")),
+            "n_months": int(row.get("n_months_bt") or row.get("n_months") or 0),
+        }]
+
+    n_nodes = int(row.get("n_nodes") or 0)
+    n_months = int(row.get("n_months") or 0)
+    return {
+        "id": "H15",
+        "title": "Does customer news diffuse to suppliers?",
+        "horizon": "1 month",
+        "claim": "A node's customers' prior-month return predicts its forward return",
+        "mechanism": "Limited attention: suppliers under-react to customer news (Cohen-Frazzini)",
+        "verdict": verdict,
+        "evidence_chain": [
+            {"stage": "predictor", "metric": "customers' prior-month resid return",
+             "value": _num(slope)},
+            {"stage": "de-beta", "metric": "M2 residual (market + sector)",
+             "value": _num(slope)},
+            {"stage": "OOS sign-rate", "metric": "walk-forward", "value": _num(oos, 2)},
+        ],
+        "stat": {"name": "slope", "value": _num(slope),
+                 "ci": [_num(lo), _num(row.get("slope_hi"))],
+                 "q_value": _num(q_value), "n": int(row.get("n_obs") or 0)},
+        "caveats": [
+            f"{n_nodes} suppliers x {n_months} months; small cross-section",
+            "Backtest (if shown) is gross of costs/turnover/borrow; equal-weight; 1-month horizon",
+            "De-beta'd M2 returns -> not the H0 sector beta",
+        ],
+        "chart": {"type": "link_momentum", "ref": "h15"},
+        "detail_rows": detail,
+    }
+
+
 def h4_record(rows: pd.DataFrame) -> dict:
     """H4: is the chip cycle already priced into semis equity returns?"""
     elig = rows[(rows["n_obs"] > 0) & rows["slope"].notna()]
@@ -660,4 +718,10 @@ def build_signal_records(con) -> list[dict]:  # pragma: no cover
         h4 = con.execute('SELECT * FROM macro_sector').df()
         if len(h4):
             records.append(h4_record(h4))
+    has_h15 = con.execute("SELECT count(*) FROM information_schema.tables "
+                          "WHERE table_name='link_momentum'").fetchone()[0] > 0
+    if has_h15:
+        h15 = con.execute('SELECT * FROM link_momentum').df()
+        if len(h15):
+            records.append(h15_record(h15))
     return records
