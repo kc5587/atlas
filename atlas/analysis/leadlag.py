@@ -559,6 +559,27 @@ def run() -> None:  # pragma: no cover
     con.execute("CREATE OR REPLACE TABLE networking_pricing AS SELECT * FROM h12t")
     con.unregister("h12t")
     print(f"networking_pricing: wrote {len(h12)} capex->price edge rows")
+    from analysis.link_momentum import (
+        link_backtest,
+        link_predictability,
+        link_signal_panel,
+        monthly_returns,
+        residual_monthly_returns,
+    )
+    from config import H15_MIN_MONTHS
+    _monthly = monthly_returns(returns)
+    _resid_m = residual_monthly_returns(_monthly, nodes)
+    _panel = link_signal_panel(_resid_m, nodes, edges, min_months=H15_MIN_MONTHS)
+    _pred = link_predictability(_panel, iters=BOOTSTRAP_ITERS, seed=RANDOM_SEED)
+    # Backtest is gated: a null card carries no long-short result.
+    _gated = (_pred["slope"] > 0) and (_pred["slope_lo"] > 0)
+    _bt = link_backtest(_panel, _monthly) if _gated else {}
+    h15 = pd.DataFrame([{**_pred, **_bt, "gated": bool(_gated)}])
+    con.register("h15t", h15)
+    con.execute("CREATE OR REPLACE TABLE link_momentum AS SELECT * FROM h15t")
+    con.unregister("h15t")
+    print(f"link_momentum: slope={_pred['slope']:.4f} p={_pred['p_value']:.3f} "
+          f"oos={_pred['oos_sign_rate']:.2f} gated={_gated}")
     from analysis.event_drift import event_drift
     h2 = event_drift(
         core_fund,
