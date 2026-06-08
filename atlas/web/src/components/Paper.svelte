@@ -120,7 +120,7 @@
     justify-content: center;
   }
 
-  .body {
+  :global(.paper .body) {
     grid-column: 1;
   }
 
