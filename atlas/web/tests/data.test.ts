@@ -1,6 +1,10 @@
 // atlas/web/tests/data.test.ts
-import { describe, expect, it } from "vitest";
-import { parseGraph, parseLeadLag } from "../src/lib/data";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadOptionalJSON, parseGraph, parseLeadLag } from "../src/lib/data";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("data parsing", () => {
   it("parses a valid graph", () => {
@@ -55,5 +59,29 @@ describe("data parsing", () => {
         contradicts_thesis: null, inverse_lead: null },
     ]);
     expect(ll[0].factor_model).toBeNull();
+  });
+
+  it("loads optional JSON, tolerates 404, and ignores SPA-fallback HTML", async () => {
+    const make = (opts: { ok: boolean; status: number; contentType: string; body: () => unknown }) => ({
+      ok: opts.ok,
+      status: opts.status,
+      headers: { get: (h: string) => (h.toLowerCase() === "content-type" ? opts.contentType : null) },
+      json: async () => opts.body(),
+    });
+    const fetchMock = vi.fn(async (path: string) => {
+      if (path.includes("present")) {
+        return make({ ok: true, status: 200, contentType: "application/json", body: () => ({ points: [1] }) });
+      }
+      if (path.includes("fallback")) {
+        // Static host serves index.html (200) for a missing file: parsing it would throw.
+        return make({ ok: true, status: 200, contentType: "text/html", body: () => { throw new SyntaxError("Unexpected token '<'"); } });
+      }
+      return make({ ok: false, status: 404, contentType: "text/plain", body: () => null });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(loadOptionalJSON("data/present.json")).resolves.toEqual({ points: [1] });
+    await expect(loadOptionalJSON("data/missing.json")).resolves.toBeNull();
+    await expect(loadOptionalJSON("data/fallback.json")).resolves.toBeNull();
   });
 });

@@ -20,6 +20,8 @@
     "vitest": "^2"
   },
   "dependencies": {
+    "@fontsource/eb-garamond": "^5.2.7",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
     "d3": "^7.9",
     "scrollama": "^3.2",
     "zod": "^3.23"

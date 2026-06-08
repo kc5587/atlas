@@ -27,6 +27,21 @@ def test_vrp_series_positive_when_implied_above_realized():
     assert vrp.mean() > 0
 
 
+def test_vrp_timeseries_aligned_points():
+    from analysis.vol_premium import vrp_timeseries
+
+    idx = pd.date_range("2021-01-01", periods=120, freq="B")
+    iv = pd.Series(np.linspace(18, 22, 120), index=idx)
+    r = pd.Series(np.random.default_rng(7).standard_normal(120) * 0.01, index=idx)
+
+    out = vrp_timeseries(iv, r, horizon=21)
+    assert {"date", "implied_var", "realized_var", "vrp"} <= set(out.columns)
+    assert len(out) >= 1
+    row = out.iloc[0]
+    assert abs(row["implied_var"] - row["realized_var"] - row["vrp"]) < 1e-9
+    assert row["implied_var"] > 0
+
+
 def test_incremental_oos_r2_positive_when_iv_carries_signal():
     from analysis.vol_premium import incremental_oos_r2
 

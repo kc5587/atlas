@@ -8,8 +8,9 @@ from numbers import Real
 from pathlib import Path
 
 import duckdb
+import pandas as pd
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 REQUIRED = ["graph_nodes", "graph_edges", "leadlag"]
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "atlas.duckdb"
 DEFAULT_OUT = Path(__file__).resolve().parent / "static" / "data"
@@ -18,6 +19,14 @@ DEFAULT_OUT = Path(__file__).resolve().parent / "static" / "data"
 def _has_table(con: duckdb.DuckDBPyConnection, name: str) -> bool:
     return con.execute(
         "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
+    ).fetchone()[0] > 0
+
+
+def _has_column(con: duckdb.DuckDBPyConnection, table: str, column: str) -> bool:
+    return con.execute(
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_name = ? AND column_name = ?",
+        [table, column],
     ).fetchone()[0] > 0
 
 
@@ -92,6 +101,126 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
 
     leadlag = con.execute("SELECT * FROM leadlag").df().to_dict("records")
     _write_json(out_dir / "leadlag.json", leadlag, default=str)
+
+    from analysis.correlogram import correlogram_curve
+    from analysis.leadlag import _ticker_for_node
+    from analysis.residualize import residual_for_spec
+    from config import (
+        BOOTSTRAP_ITERS,
+        MAX_LAG_DAYS,
+        OOS_INIT_TRAIN_FRAC,
+        RANDOM_SEED,
+        STAGE_SECTOR,
+    )
+
+    confirmed_sel = (
+        "confirmed"
+        if _has_column(con, "leadlag", "confirmed")
+        else "q_value <= 0.10 AND stable AS confirmed"
+    )
+    edge_df = con.execute(
+        f'SELECT "left", "right", corr_resid, {confirmed_sel} FROM leadlag '
+        "WHERE pair_type = 'edge' AND corr_resid IS NOT NULL"
+    ).df()
+    if len(edge_df):
+        ranked = edge_df.assign(_abs=edge_df["corr_resid"].abs())
+        confirmed = ranked[ranked["confirmed"]]
+        pool = confirmed if len(confirmed) else ranked
+        head = pool.sort_values("_abs", ascending=False).iloc[0]
+        left_id, right_id = str(head["left"]), str(head["right"])
+        ret = (
+            con.execute(
+                "SELECT ticker, date, log_return FROM returns ORDER BY ticker, date"
+            ).df()
+            if _has_table(con, "returns")
+            else None
+        )
+        nodes_df = con.execute("SELECT id, tickers, stage FROM graph_nodes").df()
+        lt = _ticker_for_node(nodes_df, left_id) or left_id
+        rt = _ticker_for_node(nodes_df, right_id) or right_id
+        cg_points: list[dict] = []
+        if ret is not None:
+            by = {
+                t: g.set_index("date")["log_return"].sort_index()
+                for t, g in ret.groupby("ticker")
+            }
+            factors = {etf: by[etf] for etf in FACTOR_TICKERS.values() if etf in by}
+            stage = {r.id: r.stage for r in nodes_df.itertuples()}
+            sec_l = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(left_id), ""))
+            sec_r = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(right_id), ""))
+            sec_l = sec_l if sec_l in factors else None
+            sec_r = sec_r if sec_r in factors else None
+            if lt in by and rt in by and "SPY" in factors:
+                pair_idx = by[lt].index.intersection(by[rt].index)
+                train = pair_idx[: int(len(pair_idx) * OOS_INIT_TRAIN_FRAC)]
+                left = residual_for_spec(
+                    by[lt],
+                    factors,
+                    sector=sec_l,
+                    spec="M2",
+                    train_index=train,
+                )
+                right = residual_for_spec(
+                    by[rt],
+                    factors,
+                    sector=sec_r,
+                    spec="M2",
+                    train_index=train,
+                )
+                curve = correlogram_curve(
+                    left,
+                    right,
+                    max_lag=MAX_LAG_DAYS,
+                    iters=BOOTSTRAP_ITERS,
+                    seed=RANDOM_SEED,
+                )
+                cg_points = curve.to_dict("records")
+        _write_json(out_dir / "correlogram.json", {
+            "pair": {
+                "left": left_id,
+                "right": right_id,
+                "left_ticker": lt,
+                "right_ticker": rt,
+            },
+            "max_lag": MAX_LAG_DAYS,
+            "points": cg_points,
+        })
+
+    if _has_table(con, "vol_indices") and _has_table(con, "returns"):
+        from analysis.vol_premium import vrp_timeseries
+        from config import H6_PAIRS, H6_RV_HORIZON
+
+        vol = con.execute("SELECT series, date, close FROM vol_indices").df()
+        rdf = con.execute("SELECT ticker, date, log_return FROM returns").df()
+        iv_by = {
+            s: g.set_index("date")["close"].sort_index()
+            for s, g in vol.groupby("series")
+        }
+        ret_by = {
+            t: g.set_index("date")["log_return"].sort_index()
+            for t, g in rdf.groupby("ticker")
+        }
+        implied, under = H6_PAIRS[0]
+        points: list[dict] = []
+        if implied in iv_by and under in ret_by:
+            ts = vrp_timeseries(iv_by[implied], ret_by[under], horizon=H6_RV_HORIZON)
+            points = downsample(
+                [
+                    {
+                        "date": str(pd.Timestamp(d).date()),
+                        "implied_var": iv,
+                        "realized_var": rv,
+                        "vrp": v,
+                    }
+                    for d, iv, rv, v in ts.itertuples(index=False)
+                ],
+                max_points=400,
+            )
+        _write_json(out_dir / "vrp.json", {
+            "pair": {"implied": implied, "underlying": under},
+            "horizon": H6_RV_HORIZON,
+            "points": points,
+        })
 
     prices: dict[str, list[dict]] = {}
     if _has_table(con, "returns"):
