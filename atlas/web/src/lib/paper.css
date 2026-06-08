@@ -1,0 +1,44 @@
+:root {
+  --paper: #fbfaf6;
+  --ink: #1b1a17;
+  --ink-soft: #403c34;
+  --muted: #8a8377;
+  --rule: #d9d3c6;
+  --rule-2: #c7c0b0;
+  --blue: #2a4b8d;
+  --red: #9b2d2d;
+  --null: #b3ab9c;
+  --suggest: #9a6a1e;
+  --serif: "EB Garamond", Georgia, serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.paper {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1.62;
+  text-rendering: optimizeLegibility;
+}
+
+.paper .num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.paper figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fcfbf8;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
