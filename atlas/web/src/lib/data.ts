@@ -13,6 +13,13 @@ async function getJSON(path: string): Promise<unknown> {
   return r.json();
 }
 
+export async function loadOptionalJSON(path: string): Promise<unknown | null> {
+  const r = await fetch(path);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`failed to load ${path}: ${r.status}`);
+  return r.json();
+}
+
 export async function loadAll(base = "data") {
   const [graph, leadlag, series, meta] = await Promise.all([
     getJSON(`${base}/graph.json`).then(parseGraph),

@@ -1,6 +1,10 @@
 // atlas/web/tests/data.test.ts
-import { describe, expect, it } from "vitest";
-import { parseGraph, parseLeadLag } from "../src/lib/data";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadOptionalJSON, parseGraph, parseLeadLag } from "../src/lib/data";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("data parsing", () => {
   it("parses a valid graph", () => {
@@ -55,5 +59,17 @@ describe("data parsing", () => {
         contradicts_thesis: null, inverse_lead: null },
     ]);
     expect(ll[0].factor_model).toBeNull();
+  });
+
+  it("loads optional JSON and tolerates 404", async () => {
+    const fetchMock = vi.fn(async (path: string) => ({
+      ok: path.includes("present"),
+      status: path.includes("present") ? 200 : 404,
+      json: async () => ({ points: [1] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(loadOptionalJSON("data/present.json")).resolves.toEqual({ points: [1] });
+    await expect(loadOptionalJSON("data/missing.json")).resolves.toBeNull();
   });
 });

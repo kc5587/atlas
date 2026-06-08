@@ -1,7 +1,9 @@
 <script lang="ts">
   import "../lib/paper.css";
+  import { correlogramPoints, vrpSeriesPoints } from "../lib/paper";
   import type { Signal } from "../lib/signals";
   import type { Graph } from "../lib/types";
+  import CorrelogramFigure from "./paper/CorrelogramFigure.svelte";
   import EvidenceStrip from "./paper/EvidenceStrip.svelte";
   import Figure from "./paper/Figure.svelte";
   import Hypothesis from "./paper/Hypothesis.svelte";
@@ -9,17 +11,31 @@
   import Sidenote from "./paper/Sidenote.svelte";
   import ValueChainFigure from "./paper/ValueChainFigure.svelte";
   import VolcanoFigure from "./paper/VolcanoFigure.svelte";
+  import VrpFigure from "./paper/VrpFigure.svelte";
 
-  let { graph, signals }: { graph: Graph; signals: Signal[] } = $props();
+  let {
+    graph,
+    signals,
+    correlogram = null,
+    vrp = null,
+  }: {
+    graph: Graph;
+    signals: Signal[];
+    correlogram?: unknown;
+    vrp?: unknown;
+  } = $props();
 
   const n = $derived({
     c: signals.filter((s) => s.verdict === "confirmed").length,
     s: signals.filter((s) => s.verdict === "suggestive").length,
     n: signals.filter((s) => s.verdict === "null").length,
   });
-  // §4 figures are numbered after Figures 1 (DAG) and 2 (volcano).
+  // §4 headline figures reserve 3-6 for forest, correlogram, event-study, and VRP.
   const findings = $derived(signals.filter((s) => s.detail_rows.length > 0));
   const evidenceSignal = $derived(signals.find((signal) => signal.evidence_chain.length > 0));
+  const correlogramVM = $derived(correlogramPoints(correlogram));
+  const vrpVM = $derived(vrpSeriesPoints(vrp));
+  const detailFigureNo = (_signal: Signal, index: number) => (index === 0 ? 3 : index + 7);
 </script>
 
 <main class="paper page">
@@ -96,7 +112,27 @@
   </section>
 
   {#each findings as s, i}
-    <Hypothesis signal={s} section={`4.${i + 1}`} figureNo={i + 3} />
+    <Hypothesis signal={s} section={`4.${i + 1}`} figureNo={detailFigureNo(s, i)} />
+    {#if s.id === "H1" && correlogramVM}
+      <Figure n={4}>
+        {#snippet caption()}
+          <em>Lead-lag cross-correlogram.</em> By-lag residual cross-correlation for
+          {correlogramVM.pairLabel}; the shaded band is a block-bootstrap confidence
+          interval and the labelled stem marks the selected peak.
+        {/snippet}
+        <CorrelogramFigure data={correlogramVM} />
+      </Figure>
+    {/if}
+    {#if s.id === "H6" && vrpVM}
+      <Figure n={6}>
+        {#snippet caption()}
+          <em>Variance risk premium.</em> Implied variance (blue) sits persistently above
+          subsequent realized variance (grey) for {vrpVM.label}: the options market charges
+          a positive premium (H6).
+        {/snippet}
+        <VrpFigure data={vrpVM} />
+      </Figure>
+    {/if}
   {/each}
 
   <section class="body">
