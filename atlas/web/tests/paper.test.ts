@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   confirmedPairs,
   dagLayout,
+  detailCoefficients,
   effectSize,
+  labelForDetailRow,
   negLog10Q,
   tableRows,
   volcanoPoints,
@@ -113,5 +115,30 @@ describe("paper table + dag", () => {
     for (const v of [lay.edges[0].x1, lay.edges[0].y1, lay.edges[0].x2, lay.edges[0].y2]) {
       expect(Number.isFinite(v)).toBe(true);
     }
+  });
+});
+
+describe("detail coefficients", () => {
+  it("labels rows from their identity fields", () => {
+    expect(labelForDetailRow({ left: "asml", right: "tsmc" })).toBe("asml → tsmc");
+    expect(labelForDetailRow({ target: "SPY", horizon: 21 })).toBe("SPY · 21d");
+    expect(labelForDetailRow({ indicator: "CAPUTLG3344S" })).toBe("CAPUTLG3344S");
+    expect(labelForDetailRow({ pair: "^VIX~SPY" })).toBe("^VIX~SPY");
+    expect(labelForDetailRow({ foo: 1 })).toBe("row 1");
+  });
+
+  it("extracts effect/CI/passes from slope rows", () => {
+    const s = sig({ id: "H1", detail_rows: [
+      { left: "asml", right: "tsmc", slope: 0.41, slope_lo: 0.12, slope_hi: 0.58, q_value: 0.04 },
+      { left: "x", right: "y", slope: -0.02, slope_lo: -0.1, slope_hi: 0.06, q_value: 0.7 },
+    ] });
+    const cs = detailCoefficients(s);
+    expect(cs[0]).toEqual({ label: "asml → tsmc", effect: 0.41, lo: 0.12, hi: 0.58, passes: true });
+    expect(cs[1].passes).toBe(false);
+  });
+
+  it("falls back to mean_vrp / vrp CI for H6-style rows", () => {
+    const s = sig({ id: "H6", detail_rows: [{ pair: "^VIX~SPY", mean_vrp: 0.009, vrp_lo: 0.003, vrp_hi: 0.014 }] });
+    expect(detailCoefficients(s)[0]).toMatchObject({ label: "^VIX~SPY", effect: 0.009, lo: 0.003, hi: 0.014 });
   });
 });

@@ -170,3 +170,35 @@ export function dagLayout(
 
   return { nodes, edges };
 }
+
+export interface DetailCoefficient {
+  label: string;
+  effect: number;
+  lo: number | null;
+  hi: number | null;
+  passes: boolean; // q <= FDR_ALPHA
+}
+
+const numOr = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+export function labelForDetailRow(row: Record<string, unknown>): string {
+  if (typeof row.left === "string" && typeof row.right === "string") return `${row.left} → ${row.right}`;
+  if (typeof row.target === "string" && row.horizon != null) return `${row.target} · ${row.horizon}d`;
+  if (typeof row.indicator === "string") return row.indicator;
+  if (typeof row.name === "string") return row.name;
+  if (typeof row.pair === "string") return row.pair;
+  return "row 1";
+}
+
+/** Common {label, effect, lo, hi, passes} per detail row, across heterogeneous schemas. */
+export function detailCoefficients(sig: Signal): DetailCoefficient[] {
+  return sig.detail_rows.map((raw, i) => {
+    const row = raw as Record<string, unknown>;
+    const effect = numOr(row.slope) ?? numOr(row.mean_vrp) ?? numOr(row.corr) ?? 0;
+    const lo = numOr(row.slope_lo) ?? numOr(row.vrp_lo);
+    const hi = numOr(row.slope_hi) ?? numOr(row.vrp_hi);
+    const q = numOr(row.q_value);
+    const label = labelForDetailRow(row) === "row 1" ? `row ${i + 1}` : labelForDetailRow(row);
+    return { label, effect, lo, hi, passes: q != null && q <= FDR_ALPHA };
+  });
+}
