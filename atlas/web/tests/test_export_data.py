@@ -91,6 +91,29 @@ def test_export_writes_correlogram(tmp_path):
     assert {"lag", "corr", "ci_lo", "ci_hi", "is_peak", "passes_fdr"} <= set(row)
 
 
+def test_export_writes_vrp(tmp_path):
+    db = tmp_path / "atlas.duckdb"
+    con = _fixture_db(db)
+    con.execute("CREATE TABLE vol_indices(series VARCHAR, date DATE, close DOUBLE)")
+    con.execute(
+        "INSERT INTO vol_indices SELECT '^VIX', DATE '2020-01-01' + INTERVAL (i) DAY, 20.0 "
+        "FROM range(0,120) t(i)"
+    )
+    con.execute(
+        "INSERT INTO returns SELECT 'SPY', DATE '2020-01-01' + INTERVAL (i) DAY, 0.001 "
+        "FROM range(0,120) t(i)"
+    )
+    out = tmp_path / "data"
+    export_all(con, out)
+    con.close()
+
+    vrp = json.loads((out / "vrp.json").read_text())
+    assert "pair" in vrp and isinstance(vrp["points"], list)
+    if vrp["points"]:
+        row = vrp["points"][0]
+        assert {"date", "implied_var", "realized_var", "vrp"} <= set(row)
+
+
 def test_export_all_missing_required_table_raises(tmp_path):
     db = tmp_path / "x.duckdb"
     con = duckdb.connect(str(db))

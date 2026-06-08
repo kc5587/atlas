@@ -8,6 +8,7 @@ from numbers import Real
 from pathlib import Path
 
 import duckdb
+import pandas as pd
 
 SCHEMA_VERSION = "3"
 REQUIRED = ["graph_nodes", "graph_edges", "leadlag"]
@@ -154,6 +155,42 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
             },
             "max_lag": MAX_LAG_DAYS,
             "points": cg_points,
+        })
+
+    if _has_table(con, "vol_indices") and _has_table(con, "returns"):
+        from analysis.vol_premium import vrp_timeseries
+        from config import H6_PAIRS, H6_RV_HORIZON
+
+        vol = con.execute("SELECT series, date, close FROM vol_indices").df()
+        rdf = con.execute("SELECT ticker, date, log_return FROM returns").df()
+        iv_by = {
+            s: g.set_index("date")["close"].sort_index()
+            for s, g in vol.groupby("series")
+        }
+        ret_by = {
+            t: g.set_index("date")["log_return"].sort_index()
+            for t, g in rdf.groupby("ticker")
+        }
+        implied, under = H6_PAIRS[0]
+        points: list[dict] = []
+        if implied in iv_by and under in ret_by:
+            ts = vrp_timeseries(iv_by[implied], ret_by[under], horizon=H6_RV_HORIZON)
+            points = downsample(
+                [
+                    {
+                        "date": str(pd.Timestamp(d).date()),
+                        "implied_var": iv,
+                        "realized_var": rv,
+                        "vrp": v,
+                    }
+                    for d, iv, rv, v in ts.itertuples(index=False)
+                ],
+                max_points=400,
+            )
+        _write_json(out_dir / "vrp.json", {
+            "pair": {"implied": implied, "underlying": under},
+            "horizon": H6_RV_HORIZON,
+            "points": points,
         })
 
     prices: dict[str, list[dict]] = {}
