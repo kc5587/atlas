@@ -6,6 +6,7 @@ import {
   negLog10Q,
   tableRows,
   volcanoPoints,
+  volcanoXDomain,
 } from "../src/lib/paper";
 import type { Signal } from "../src/lib/signals";
 
@@ -37,20 +38,30 @@ describe("paper transforms", () => {
     expect(negLog10Q(null)).toBeNull();
   });
 
-  it("volcanoPoints includes only slope hypotheses with a finite q", () => {
+  it("volcanoPoints standardizes effect to a t-statistic and needs slope+q+ci", () => {
     const signals = [
-      sig({ id: "H1", verdict: "confirmed", stat: { name: "slope", value: 0.41, q_value: 0.055, n: 11 } }),
-      sig({ id: "H0", stat: { name: "edges_confirmed", value: 1, q_value: 0.04, n: 1 } }),
-      sig({ id: "H6", verdict: "confirmed", stat: { name: "mean_vrp", value: 0.009, q_value: null, n: 4120 } }),
+      // slope 0.4 with CI width 0.4 -> SE=(0.6-0.2)/3.92, t = 0.4/SE = 3.92
+      sig({ id: "H1", verdict: "confirmed", stat: { name: "slope", value: 0.4, q_value: 0.055, ci: [0.2, 0.6], n: 11 } }),
+      // large raw slope but comparable once standardized (would have clipped a slope axis)
+      sig({ id: "H8", verdict: "confirmed", stat: { name: "slope", value: 2.58, q_value: 0.04, ci: [1.68, 4.07], n: 6 } }),
+      sig({ id: "H0", stat: { name: "edges_confirmed", value: 1, q_value: 0.04, ci: [0, 2], n: 1 } }),      // excluded: not a slope
+      sig({ id: "H6", verdict: "confirmed", stat: { name: "mean_vrp", value: 0.009, q_value: null, n: 4120 } }), // excluded: null q
+      sig({ id: "HX", stat: { name: "slope", value: 0.2, q_value: 0.2, n: 5 } }),                            // excluded: no CI -> no SE
     ];
     const pts = volcanoPoints(signals);
-    expect(pts.map((p) => p.id)).toEqual(["H1"]);
-    expect(pts[0]).toMatchObject({
-      id: "H1",
-      slope: 0.41,
-      y: expect.any(Number),
-      verdict: "confirmed",
-    });
+    expect(pts.map((p) => p.id)).toEqual(["H1", "H8"]);
+    expect(pts[0].t).toBeCloseTo(3.92, 2);
+    expect(pts[1].t).toBeGreaterThan(3); // H8 visible & comparable, not clipped off a slope axis
+    expect(pts[0]).toMatchObject({ id: "H1", y: expect.any(Number), verdict: "confirmed" });
+  });
+
+  it("volcanoXDomain pads the t-range and always includes zero", () => {
+    const [lo, hi] = volcanoXDomain([
+      { id: "a", slope: 0, t: 0.5, y: 1, q: 0.1, verdict: "null" },
+      { id: "b", slope: 0, t: 4.2, y: 2, q: 0.01, verdict: "confirmed" },
+    ]);
+    expect(lo).toBeLessThanOrEqual(0);
+    expect(hi).toBeGreaterThanOrEqual(4.2);
   });
 });
 

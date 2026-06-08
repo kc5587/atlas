@@ -60,14 +60,14 @@
 
   <section class="body">
     <h2 class="sec"><span class="hn num">2</span>The testing campaign at a glance</h2>
-    <p>Figure 2 plots each slope hypothesis by effect size against selection-aware significance, with the
-    false-discovery threshold drawn explicitly.<sup class="ref">2</sup></p>
+    <p>Figure 2 plots each slope hypothesis by its standardized effect (a t-statistic) against
+    selection-aware significance, with the false-discovery threshold drawn explicitly.<sup class="ref">2</sup></p>
   </section>
   <Sidenote n={2}>q-values are Benjamini–Hochberg adjusted within each family over finite, eligible edges. The dashed line is q = 0.10. H0 (an edge count) and H6 (variance premium, criterion-based) are reported in Table 1.</Sidenote>
 
   <Figure n={2}>
     {#snippet caption()}
-      <em>Volcano plot.</em> Effect size versus −log<sub>10</sub> q for all slope hypotheses. Points above the dashed line clear FDR control at q = 0.10.
+      <em>Volcano plot.</em> Standardized effect (t = slope ÷ SE) versus −log<sub>10</sub> q for all slope hypotheses; the t-statistic makes heterogeneous slopes comparable. Points above the dashed line clear FDR control at q = 0.10.
     {/snippet}
     <VolcanoFigure {signals} />
   </Figure>

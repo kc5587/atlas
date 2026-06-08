@@ -5,9 +5,18 @@ export const FDR_ALPHA = 0.1;
 export interface VolcanoPoint {
   id: string;
   slope: number;
+  /** Standardized effect: t = slope / SE, comparable across heterogeneous hypotheses. */
+  t: number;
   y: number;
   q: number;
   verdict: Signal["verdict"];
+}
+
+/** Standard error from a 95% CI: SE = (hi - lo) / (2 * 1.96). */
+export function standardError(ci: readonly [number, number] | null | undefined): number | null {
+  if (!ci) return null;
+  const se = (ci[1] - ci[0]) / (2 * 1.96);
+  return Number.isFinite(se) && se > 0 ? se : null;
 }
 
 export interface TableRow {
@@ -61,20 +70,34 @@ export function negLog10Q(q: number | null | undefined): number | null {
   return -Math.log10(q);
 }
 
-/** Slope hypotheses with a finite selection-aware q. */
+/**
+ * Slope hypotheses with a finite q AND a CI (needed to standardize). Raw slopes are not
+ * comparable across hypotheses (different units/scales), so the x-axis is the t-statistic.
+ */
 export function volcanoPoints(signals: Signal[]): VolcanoPoint[] {
   return signals.flatMap((signal) => {
     if (!signal.stat.name.endsWith("slope")) return [];
     const y = negLog10Q(signal.stat.q_value);
-    if (y == null || signal.stat.q_value == null) return [];
+    const se = standardError(signal.stat.ci);
+    if (y == null || signal.stat.q_value == null || se == null) return [];
     return [{
       id: signal.id,
       slope: effectSize(signal),
+      t: effectSize(signal) / se,
       y,
       q: signal.stat.q_value,
       verdict: signal.verdict,
     }];
   });
+}
+
+/** Padded [min, max] t-domain for the volcano x-axis; always spans zero. */
+export function volcanoXDomain(points: VolcanoPoint[]): [number, number] {
+  const ts = points.map((p) => p.t);
+  const lo = Math.min(0, ...ts);
+  const hi = Math.max(0, ...ts);
+  const pad = (hi - lo) * 0.08 || 0.5;
+  return [lo - pad, hi + pad];
 }
 
 export function tableRows(signals: Signal[]): TableRow[] {
