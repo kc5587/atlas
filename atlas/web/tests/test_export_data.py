@@ -55,7 +55,7 @@ def test_export_all_writes_expected_files(tmp_path):
     assert "criticality" in graph["nodes"][0]
     assert graph["edges"][0]["from_id"] == "nvidia"
     meta = json.loads((out / "meta.json").read_text())
-    assert meta["schema_version"] == "2"
+    assert meta["schema_version"] == "3"
     assert meta["stages"] == [
         "eda", "equipment", "foundry", "packaging", "chips",
         "networking", "grid", "power", "cloud",
@@ -75,6 +75,20 @@ def test_fixture_db_exports_fundamentals(tmp_path):
     assert "fundamentals" in series
     assert series["fundamentals"]["NVDA"]["capex"][0]["value"] == 248000000.0
     assert {row["pair_type"] for row in leadlag} >= {"fund_capex_rev", "fund_capex_price"}
+
+
+def test_export_writes_correlogram(tmp_path):
+    db = tmp_path / "atlas.duckdb"
+    con = _fixture_db(db)
+    out = tmp_path / "data"
+    export_all(con, out)
+    con.close()
+
+    cg = json.loads((out / "correlogram.json").read_text())
+    assert "pair" in cg and "left" in cg["pair"] and "right" in cg["pair"]
+    assert isinstance(cg["points"], list) and len(cg["points"]) >= 1
+    row = cg["points"][0]
+    assert {"lag", "corr", "ci_lo", "ci_hi", "is_peak", "passes_fdr"} <= set(row)
 
 
 def test_export_all_missing_required_table_raises(tmp_path):

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import duckdb
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 REQUIRED = ["graph_nodes", "graph_edges", "leadlag"]
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "atlas.duckdb"
 DEFAULT_OUT = Path(__file__).resolve().parent / "static" / "data"
@@ -18,6 +18,14 @@ DEFAULT_OUT = Path(__file__).resolve().parent / "static" / "data"
 def _has_table(con: duckdb.DuckDBPyConnection, name: str) -> bool:
     return con.execute(
         "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
+    ).fetchone()[0] > 0
+
+
+def _has_column(con: duckdb.DuckDBPyConnection, table: str, column: str) -> bool:
+    return con.execute(
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_name = ? AND column_name = ?",
+        [table, column],
     ).fetchone()[0] > 0
 
 
@@ -92,6 +100,61 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
 
     leadlag = con.execute("SELECT * FROM leadlag").df().to_dict("records")
     _write_json(out_dir / "leadlag.json", leadlag, default=str)
+
+    from analysis.correlogram import correlogram_curve
+    from analysis.leadlag import _ticker_for_node
+    from config import BOOTSTRAP_ITERS, MAX_LAG_DAYS, RANDOM_SEED
+
+    confirmed_sel = (
+        "confirmed"
+        if _has_column(con, "leadlag", "confirmed")
+        else "q_value <= 0.10 AND stable AS confirmed"
+    )
+    edge_df = con.execute(
+        f'SELECT "left", "right", corr_resid, {confirmed_sel} FROM leadlag '
+        "WHERE pair_type = 'edge' AND corr_resid IS NOT NULL"
+    ).df()
+    if len(edge_df):
+        ranked = edge_df.assign(_abs=edge_df["corr_resid"].abs())
+        confirmed = ranked[ranked["confirmed"]]
+        pool = confirmed if len(confirmed) else ranked
+        head = pool.sort_values("_abs", ascending=False).iloc[0]
+        left_id, right_id = str(head["left"]), str(head["right"])
+        ret = (
+            con.execute(
+                "SELECT ticker, date, log_return FROM returns ORDER BY ticker, date"
+            ).df()
+            if _has_table(con, "returns")
+            else None
+        )
+        nodes_df = con.execute("SELECT id, tickers FROM graph_nodes").df()
+        lt = _ticker_for_node(nodes_df, left_id) or left_id
+        rt = _ticker_for_node(nodes_df, right_id) or right_id
+        cg_points: list[dict] = []
+        if ret is not None:
+            by = {
+                t: g.set_index("date")["log_return"].sort_index()
+                for t, g in ret.groupby("ticker")
+            }
+            if lt in by and rt in by:
+                curve = correlogram_curve(
+                    by[lt],
+                    by[rt],
+                    max_lag=MAX_LAG_DAYS,
+                    iters=BOOTSTRAP_ITERS,
+                    seed=RANDOM_SEED,
+                )
+                cg_points = curve.to_dict("records")
+        _write_json(out_dir / "correlogram.json", {
+            "pair": {
+                "left": left_id,
+                "right": right_id,
+                "left_ticker": lt,
+                "right_ticker": rt,
+            },
+            "max_lag": MAX_LAG_DAYS,
+            "points": cg_points,
+        })
 
     prices: dict[str, list[dict]] = {}
     if _has_table(con, "returns"):
