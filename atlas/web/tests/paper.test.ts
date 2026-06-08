@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   confirmedPairs,
+  correlogramPoints,
   dagLayout,
   detailCoefficients,
   effectSize,
@@ -9,6 +10,7 @@ import {
   tableRows,
   volcanoPoints,
   volcanoXDomain,
+  vrpSeriesPoints,
 } from "../src/lib/paper";
 import type { Signal } from "../src/lib/signals";
 
@@ -140,5 +142,40 @@ describe("detail coefficients", () => {
   it("falls back to mean_vrp / vrp CI for H6-style rows", () => {
     const s = sig({ id: "H6", detail_rows: [{ pair: "^VIX~SPY", mean_vrp: 0.009, vrp_lo: 0.003, vrp_hi: 0.014 }] });
     expect(detailCoefficients(s)[0]).toMatchObject({ label: "^VIX~SPY", effect: 0.009, lo: 0.003, hi: 0.014 });
+  });
+});
+
+describe("correlogramPoints", () => {
+  it("maps rows and finds the peak lag", () => {
+    const raw = {
+      pair: { left: "A", right: "B", left_ticker: "AA", right_ticker: "BB" },
+      max_lag: 2,
+      points: [
+        { lag: -1, corr: 0.1, ci_lo: -0.2, ci_hi: 0.3, is_peak: false, passes_fdr: false },
+        { lag: 0, corr: 0.5, ci_lo: 0.2, ci_hi: 0.7, is_peak: true, passes_fdr: true },
+        { lag: 1, corr: -0.2, ci_lo: -0.4, ci_hi: 0.0, is_peak: false, passes_fdr: false },
+      ],
+    };
+    const out = correlogramPoints(raw);
+    expect(out!.points).toHaveLength(3);
+    expect(out!.peakLag).toBe(0);
+    expect(out!.pairLabel).toBe("AA → BB");
+  });
+
+  it("returns null on empty points", () => {
+    expect(correlogramPoints({ pair: {}, max_lag: 2, points: [] })).toBeNull();
+  });
+});
+
+describe("vrpSeriesPoints", () => {
+  it("parses dates and keeps the three series", () => {
+    const raw = {
+      pair: { implied: "^VIX", underlying: "SPY" },
+      horizon: 21,
+      points: [{ date: "2021-01-04", implied_var: 0.04, realized_var: 0.03, vrp: 0.01 }],
+    };
+    const out = vrpSeriesPoints(raw);
+    expect(out!.points[0].impliedVar).toBeCloseTo(0.04);
+    expect(out!.label).toContain("^VIX");
   });
 });

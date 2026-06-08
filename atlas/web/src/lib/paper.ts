@@ -202,3 +202,74 @@ export function detailCoefficients(sig: Signal): DetailCoefficient[] {
     return { label, effect, lo, hi, passes: q != null && q <= FDR_ALPHA };
   });
 }
+
+export interface CorrelogramPoint {
+  lag: number;
+  corr: number;
+  ciLo: number;
+  ciHi: number;
+  isPeak: boolean;
+  passesFdr: boolean;
+}
+
+export interface Correlogram {
+  pairLabel: string;
+  maxLag: number;
+  peakLag: number;
+  points: CorrelogramPoint[];
+}
+
+export function correlogramPoints(raw: unknown): Correlogram | null {
+  const r = raw as {
+    pair?: { left?: string; right?: string; left_ticker?: string; right_ticker?: string };
+    max_lag?: number;
+    points?: Array<Record<string, unknown>>;
+  } | null;
+  if (!r?.points?.length) return null;
+  const points: CorrelogramPoint[] = r.points.map((p) => ({
+    lag: Number(p.lag),
+    corr: Number(p.corr),
+    ciLo: Number(p.ci_lo),
+    ciHi: Number(p.ci_hi),
+    isPeak: Boolean(p.is_peak),
+    passesFdr: Boolean(p.passes_fdr),
+  }));
+  const peak = points.find((p) => p.isPeak) ?? points.reduce((a, b) => (
+    Math.abs(b.corr) > Math.abs(a.corr) ? b : a
+  ));
+  const lt = r.pair?.left_ticker ?? r.pair?.left ?? "";
+  const rt = r.pair?.right_ticker ?? r.pair?.right ?? "";
+  return {
+    pairLabel: `${lt} → ${rt}`,
+    maxLag: Number(r.max_lag ?? 0),
+    peakLag: peak.lag,
+    points,
+  };
+}
+
+export interface VrpPoint {
+  date: Date;
+  impliedVar: number;
+  realizedVar: number;
+  vrp: number;
+}
+
+export interface VrpSeries {
+  label: string;
+  points: VrpPoint[];
+}
+
+export function vrpSeriesPoints(raw: unknown): VrpSeries | null {
+  const r = raw as {
+    pair?: { implied?: string; underlying?: string };
+    points?: Array<Record<string, unknown>>;
+  } | null;
+  if (!r?.points?.length) return null;
+  const points: VrpPoint[] = r.points.map((p) => ({
+    date: new Date(String(p.date)),
+    impliedVar: Number(p.implied_var),
+    realizedVar: Number(p.realized_var),
+    vrp: Number(p.vrp),
+  }));
+  return { label: `${r.pair?.implied ?? ""} vs ${r.pair?.underlying ?? ""}`, points };
+}
