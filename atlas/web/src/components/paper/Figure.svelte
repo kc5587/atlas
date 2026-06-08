@@ -1,7 +1,11 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
-  let { n, caption, children }: { n: number; caption: string; children: Snippet } = $props();
+  let {
+    n,
+    caption,
+    children,
+  }: { n: number; caption: Snippet; children: Snippet } = $props();
   let el: HTMLElement;
   let shown = $state(false);
 
@@ -20,7 +24,7 @@
 
 <figure bind:this={el} class="reveal" class:in={shown}>
   {@render children()}
-  <figcaption><span class="fl">Figure {n}.</span> {@html caption}</figcaption>
+  <figcaption><span class="fl">Figure {n}.</span> {@render caption()}</figcaption>
 </figure>
 
 <style>

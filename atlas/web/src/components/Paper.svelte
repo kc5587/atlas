@@ -51,7 +51,10 @@
   </section>
   <Sidenote n={1}>Nodes carry a CIK where a US filer exists; stage membership is fixed ex-ante and never tuned to a result.</Sidenote>
 
-  <Figure n={1} caption={`The AI value chain. Hairline edges denote supplier relations; <span style="color:var(--blue)">blue edges</span> mark confirmed capex→revenue propagation (H1, H11).`}>
+  <Figure n={1}>
+    {#snippet caption()}
+      The AI value chain. Hairline edges denote supplier relations; <span class="caption-blue">blue edges</span> mark confirmed capex→revenue propagation (H1, H11).
+    {/snippet}
     <ValueChainFigure {graph} {signals} />
   </Figure>
 
@@ -62,7 +65,10 @@
   </section>
   <Sidenote n={2}>q-values are Benjamini–Hochberg adjusted within each family over finite, eligible edges. The dashed line is q = 0.10. H0 (an edge count) and H6 (variance premium, criterion-based) are reported in Table 1.</Sidenote>
 
-  <Figure n={2} caption={`<em>Volcano plot.</em> Effect size versus −log<sub>10</sub> q for all slope hypotheses. Points above the dashed line clear FDR control at q = 0.10.`}>
+  <Figure n={2}>
+    {#snippet caption()}
+      <em>Volcano plot.</em> Effect size versus −log<sub>10</sub> q for all slope hypotheses. Points above the dashed line clear FDR control at q = 0.10.
+    {/snippet}
     <VolcanoFigure {signals} />
   </Figure>
 
@@ -169,6 +175,10 @@
   .ref {
     font-family: var(--mono);
     font-size: 0.62em;
+    color: var(--blue);
+  }
+
+  .caption-blue {
     color: var(--blue);
   }
 
