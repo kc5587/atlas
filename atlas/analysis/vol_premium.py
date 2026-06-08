@@ -38,6 +38,31 @@ def vrp_series(
     return pd.Series(vals).sort_index()
 
 
+def vrp_timeseries(
+    implied_vol_pts: pd.Series,
+    underlying_returns: pd.Series,
+    *,
+    horizon: int,
+) -> pd.DataFrame:
+    """Per-day implied variance, forward realized variance, and VRP."""
+    iv = implied_vol_pts.sort_index().astype(float)
+    fwd_rv = _forward_rv_series(
+        underlying_returns.sort_index().astype(float),
+        horizon,
+    )
+    common = iv.index.intersection(fwd_rv.index)
+    iv = iv.loc[common]
+    rv = fwd_rv.loc[common]
+    implied_var = (iv / 100.0) ** 2
+    out = pd.DataFrame({
+        "date": common,
+        "implied_var": implied_var.to_numpy(),
+        "realized_var": rv.to_numpy(),
+        "vrp": (implied_var - rv).to_numpy(),
+    }).dropna()
+    return out.reset_index(drop=True)
+
+
 def mean_block_ci(
     x: np.ndarray,
     *,
