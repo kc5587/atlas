@@ -4,6 +4,7 @@
   import type { Graph } from "../lib/types";
   import EvidenceStrip from "./paper/EvidenceStrip.svelte";
   import Figure from "./paper/Figure.svelte";
+  import Hypothesis from "./paper/Hypothesis.svelte";
   import ResultsTable from "./paper/ResultsTable.svelte";
   import Sidenote from "./paper/Sidenote.svelte";
   import ValueChainFigure from "./paper/ValueChainFigure.svelte";
@@ -16,6 +17,8 @@
     s: signals.filter((s) => s.verdict === "suggestive").length,
     n: signals.filter((s) => s.verdict === "null").length,
   });
+  // §4 figures are numbered after Figures 1 (DAG) and 2 (volcano).
+  const findings = $derived(signals.filter((s) => s.detail_rows.length > 0));
   const evidenceSignal = $derived(signals.find((signal) => signal.evidence_chain.length > 0));
 </script>
 
@@ -73,6 +76,38 @@
   </Figure>
 
   <div class="body"><ResultsTable {signals} /></div>
+
+  <section class="body">
+    <h2 class="sec"><span class="hn num">3</span>Method</h2>
+    <p>Every verdict is the end of a fixed evidence chain: a raw contemporaneous correlation, the same
+    relationship after de-beta'ing market and sector factors (M2), an out-of-sample sign-retention check,
+    and a selection-aware q-value that already accounts for the lag/horizon search. A hypothesis is
+    <em>confirmed</em> only when the selection-aware q clears Benjamini–Hochberg control within its family
+    and the effect carries the expected sign; <em>suggestive</em> rests on the slope CI alone; everything
+    else is <em>null</em>. "Contradicts" is reserved for a statistically significant reversal.<sup class="ref">3</sup></p>
+  </section>
+  <Sidenote n={3}>Nulls surface the closest-to-significant edge, so each card shows that even the strongest
+  link does not pass — "priced in", not "not looked at".</Sidenote>
+
+  <section class="body">
+    <h2 class="sec"><span class="hn num">4</span>Findings</h2>
+    <p>Each hypothesis is reported with its within-family detail: the individual edges, cells, or
+    indicators that compose it, shown as effect sizes with confidence intervals.</p>
+  </section>
+
+  {#each findings as s, i}
+    <Hypothesis signal={s} section={`4.${i + 1}`} figureNo={i + 3} />
+  {/each}
+
+  <section class="body">
+    <h2 class="sec"><span class="hn num">5</span>Thesis</h2>
+    <p>The pattern across {signals.length} hypotheses is consistent with efficient pricing of slow,
+    public fundamental signals: capex, the chip cycle, and power demand are largely <em>priced in</em>
+    by the time they are observable. Two exceptions survive — genuine capex→revenue propagation along
+    the supply chain (H1, with H11 suggestive), and a compensated volatility risk premium (H6, H7) that
+    pays for bearing stress rather than offering free alpha. The eight nulls are not gaps in the search;
+    they are the finding. An honest board reports what the market has already arbitraged away.</p>
+  </section>
 </main>
 
 <style>
