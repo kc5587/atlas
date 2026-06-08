@@ -1,5 +1,7 @@
 # atlas/web/tests/test_export_data.py
 import json
+import math
+from datetime import date, timedelta
 from pathlib import Path
 
 import duckdb
@@ -15,8 +17,9 @@ def _fixture_db(path: Path) -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(str(path))
     con.execute("CREATE TABLE graph_nodes(id VARCHAR, name VARCHAR, tickers VARCHAR, stage VARCHAR, region VARCHAR, cik VARCHAR)")
     con.execute("INSERT INTO graph_nodes VALUES ('nvidia','NVIDIA','[\"NVDA\"]','chips','US','0001045810')")
+    con.execute("INSERT INTO graph_nodes VALUES ('amd','AMD','[\"AMD\"]','chips','US','0000002488')")
     con.execute("CREATE TABLE graph_edges(from_id VARCHAR,to_id VARCHAR,relationship VARCHAR,note VARCHAR,evidence VARCHAR,as_of VARCHAR)")
-    con.execute("INSERT INTO graph_edges VALUES ('nvidia','nvidia','supplies','','','2024-01-01')")
+    con.execute("INSERT INTO graph_edges VALUES ('nvidia','amd','supplies','','','2024-01-01')")
     con.execute(
         "CREATE TABLE leadlag("
         'pair_type VARCHAR, "left" VARCHAR, "right" VARCHAR, '
@@ -27,11 +30,25 @@ def _fixture_db(path: Path) -> duckdb.DuckDBPyConnection:
     )
     con.execute(
         "INSERT INTO leadlag VALUES "
-        "('edge','nvidia','nvidia','M1_market',0.5,0.5,0.2,2,0.5,0.01,0.05,0.01,0.8,false,300,true),"
-        "('edge','nvidia','nvidia','M2_market_sector',0.5,0.4,0.1,2,0.4,0.02,0.06,0.02,0.7,false,300,true)"
+        "('edge','nvidia','amd','M1_market',0.5,0.5,0.2,2,0.5,0.01,0.05,0.01,0.8,false,300,true),"
+        "('edge','nvidia','amd','M2_market_sector',0.5,0.4,0.1,2,0.4,0.02,0.06,0.02,0.7,false,300,true)"
     )
     con.execute("CREATE TABLE returns(ticker VARCHAR, date DATE, log_return DOUBLE)")
-    con.execute("INSERT INTO returns SELECT 'NVDA', DATE '2020-01-01' + INTERVAL (i) DAY, 0.001 FROM range(0,400) t(i)")
+    rows = []
+    left_idio = [0.0006 * math.sin(i / 3.0) for i in range(400)]
+    for i in range(400):
+        spy = 0.001 * math.sin(i / 7.0)
+        soxx = 0.0015 * math.cos(i / 5.0)
+        nvda = 1.1 * spy + 0.9 * soxx + left_idio[i]
+        amd = 1.0 * spy + 1.0 * soxx + (left_idio[i - 5] if i >= 5 else 0.0)
+        day = date(2020, 1, 1) + timedelta(days=i)
+        rows.extend([
+            ("SPY", day, spy),
+            ("SOXX", day, soxx),
+            ("NVDA", day, nvda),
+            ("AMD", day, amd),
+        ])
+    con.executemany("INSERT INTO returns VALUES (?, ?, ?)", rows)
     return con
 
 
@@ -89,6 +106,8 @@ def test_export_writes_correlogram(tmp_path):
     assert isinstance(cg["points"], list) and len(cg["points"]) >= 1
     row = cg["points"][0]
     assert {"lag", "corr", "ci_lo", "ci_hi", "is_peak", "passes_fdr"} <= set(row)
+    lag0 = next(point for point in cg["points"] if point["lag"] == 0)
+    assert abs(lag0["corr"]) < 0.2
 
 
 def test_export_writes_vrp(tmp_path):
@@ -97,10 +116,6 @@ def test_export_writes_vrp(tmp_path):
     con.execute("CREATE TABLE vol_indices(series VARCHAR, date DATE, close DOUBLE)")
     con.execute(
         "INSERT INTO vol_indices SELECT '^VIX', DATE '2020-01-01' + INTERVAL (i) DAY, 20.0 "
-        "FROM range(0,120) t(i)"
-    )
-    con.execute(
-        "INSERT INTO returns SELECT 'SPY', DATE '2020-01-01' + INTERVAL (i) DAY, 0.001 "
         "FROM range(0,120) t(i)"
     )
     out = tmp_path / "data"

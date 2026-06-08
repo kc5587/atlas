@@ -104,7 +104,14 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
 
     from analysis.correlogram import correlogram_curve
     from analysis.leadlag import _ticker_for_node
-    from config import BOOTSTRAP_ITERS, MAX_LAG_DAYS, RANDOM_SEED
+    from analysis.residualize import residual_for_spec
+    from config import (
+        BOOTSTRAP_ITERS,
+        MAX_LAG_DAYS,
+        OOS_INIT_TRAIN_FRAC,
+        RANDOM_SEED,
+        STAGE_SECTOR,
+    )
 
     confirmed_sel = (
         "confirmed"
@@ -128,7 +135,7 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
             if _has_table(con, "returns")
             else None
         )
-        nodes_df = con.execute("SELECT id, tickers FROM graph_nodes").df()
+        nodes_df = con.execute("SELECT id, tickers, stage FROM graph_nodes").df()
         lt = _ticker_for_node(nodes_df, left_id) or left_id
         rt = _ticker_for_node(nodes_df, right_id) or right_id
         cg_points: list[dict] = []
@@ -137,10 +144,32 @@ def export_all(con: duckdb.DuckDBPyConnection, out_dir: Path) -> None:
                 t: g.set_index("date")["log_return"].sort_index()
                 for t, g in ret.groupby("ticker")
             }
-            if lt in by and rt in by:
-                curve = correlogram_curve(
+            factors = {etf: by[etf] for etf in FACTOR_TICKERS.values() if etf in by}
+            stage = {r.id: r.stage for r in nodes_df.itertuples()}
+            sec_l = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(left_id), ""))
+            sec_r = FACTOR_TICKERS.get(STAGE_SECTOR.get(stage.get(right_id), ""))
+            sec_l = sec_l if sec_l in factors else None
+            sec_r = sec_r if sec_r in factors else None
+            if lt in by and rt in by and "SPY" in factors:
+                pair_idx = by[lt].index.intersection(by[rt].index)
+                train = pair_idx[: int(len(pair_idx) * OOS_INIT_TRAIN_FRAC)]
+                left = residual_for_spec(
                     by[lt],
+                    factors,
+                    sector=sec_l,
+                    spec="M2",
+                    train_index=train,
+                )
+                right = residual_for_spec(
                     by[rt],
+                    factors,
+                    sector=sec_r,
+                    spec="M2",
+                    train_index=train,
+                )
+                curve = correlogram_curve(
+                    left,
+                    right,
                     max_lag=MAX_LAG_DAYS,
                     iters=BOOTSTRAP_ITERS,
                     seed=RANDOM_SEED,
