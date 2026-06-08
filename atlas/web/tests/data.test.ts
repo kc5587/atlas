@@ -61,15 +61,27 @@ describe("data parsing", () => {
     expect(ll[0].factor_model).toBeNull();
   });
 
-  it("loads optional JSON and tolerates 404", async () => {
-    const fetchMock = vi.fn(async (path: string) => ({
-      ok: path.includes("present"),
-      status: path.includes("present") ? 200 : 404,
-      json: async () => ({ points: [1] }),
-    }));
+  it("loads optional JSON, tolerates 404, and ignores SPA-fallback HTML", async () => {
+    const make = (opts: { ok: boolean; status: number; contentType: string; body: () => unknown }) => ({
+      ok: opts.ok,
+      status: opts.status,
+      headers: { get: (h: string) => (h.toLowerCase() === "content-type" ? opts.contentType : null) },
+      json: async () => opts.body(),
+    });
+    const fetchMock = vi.fn(async (path: string) => {
+      if (path.includes("present")) {
+        return make({ ok: true, status: 200, contentType: "application/json", body: () => ({ points: [1] }) });
+      }
+      if (path.includes("fallback")) {
+        // Static host serves index.html (200) for a missing file: parsing it would throw.
+        return make({ ok: true, status: 200, contentType: "text/html", body: () => { throw new SyntaxError("Unexpected token '<'"); } });
+      }
+      return make({ ok: false, status: 404, contentType: "text/plain", body: () => null });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(loadOptionalJSON("data/present.json")).resolves.toEqual({ points: [1] });
     await expect(loadOptionalJSON("data/missing.json")).resolves.toBeNull();
+    await expect(loadOptionalJSON("data/fallback.json")).resolves.toBeNull();
   });
 });
