@@ -5,6 +5,7 @@ import {
   dagLayout,
   detailCoefficients,
   effectSize,
+  eventStudyPoints,
   labelForDetailRow,
   negLog10Q,
   tableRows,
@@ -177,5 +178,20 @@ describe("vrpSeriesPoints", () => {
     const out = vrpSeriesPoints(raw);
     expect(out!.points[0].impliedVar).toBeCloseTo(0.04);
     expect(out!.label).toContain("^VIX");
+  });
+});
+
+describe("eventStudyPoints", () => {
+  it("sorts H2 horizon rows and carries FDR pass state", () => {
+    const s = sig({
+      id: "H2",
+      detail_rows: [
+        { target: "SPY", horizon: 63, slope: 0.03, slope_lo: 0.01, slope_hi: 0.04, q_value: 0.08 },
+        { target: "SPY", horizon: 21, slope: 0.01, slope_lo: -0.01, slope_hi: 0.02, q_value: 0.4 },
+      ],
+    });
+    const out = eventStudyPoints(s);
+    expect(out.map((p) => p.horizon)).toEqual([21, 63]);
+    expect(out[1].passes).toBe(true);
   });
 });

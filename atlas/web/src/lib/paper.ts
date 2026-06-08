@@ -273,3 +273,30 @@ export function vrpSeriesPoints(raw: unknown): VrpSeries | null {
   }));
   return { label: `${r.pair?.implied ?? ""} vs ${r.pair?.underlying ?? ""}`, points };
 }
+
+export interface EventStudyPoint {
+  horizon: number;
+  effect: number;
+  lo: number | null;
+  hi: number | null;
+  passes: boolean;
+}
+
+export function eventStudyPoints(signal: Signal): EventStudyPoint[] {
+  return detailCoefficients(signal)
+    .map((coef, index) => {
+      const row = signal.detail_rows[index] as Record<string, unknown>;
+      const horizon = typeof row.horizon === "number"
+        ? row.horizon
+        : Number.parseFloat(coef.label);
+      return {
+        horizon,
+        effect: coef.effect,
+        lo: coef.lo,
+        hi: coef.hi,
+        passes: coef.passes,
+      };
+    })
+    .filter((point) => Number.isFinite(point.horizon))
+    .sort((a, b) => a.horizon - b.horizon);
+}

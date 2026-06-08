@@ -1,10 +1,11 @@
 <script lang="ts">
   import "../lib/paper.css";
-  import { correlogramPoints, vrpSeriesPoints } from "../lib/paper";
+  import { correlogramPoints, eventStudyPoints, vrpSeriesPoints } from "../lib/paper";
   import type { Signal } from "../lib/signals";
   import type { Graph } from "../lib/types";
   import CorrelogramFigure from "./paper/CorrelogramFigure.svelte";
   import EvidenceStrip from "./paper/EvidenceStrip.svelte";
+  import EventStudyFigure from "./paper/EventStudyFigure.svelte";
   import Figure from "./paper/Figure.svelte";
   import Hypothesis from "./paper/Hypothesis.svelte";
   import ResultsTable from "./paper/ResultsTable.svelte";
@@ -122,6 +123,18 @@
         {/snippet}
         <CorrelogramFigure data={correlogramVM} />
       </Figure>
+    {/if}
+    {#if s.id === "H2"}
+      {@const h2Event = eventStudyPoints(s)}
+      {#if h2Event.length}
+        <Figure n={5}>
+          {#snippet caption()}
+            <em>Event-study CAR by horizon.</em> The same H2 detail rows shown as a connected
+            horizon profile; filled markers clear FDR control at q = 0.10.
+          {/snippet}
+          <EventStudyFigure points={h2Event} />
+        </Figure>
+      {/if}
     {/if}
     {#if s.id === "H6" && vrpVM}
       <Figure n={6}>
