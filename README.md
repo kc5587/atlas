@@ -18,3 +18,7 @@ observations, provenance, and a regional bottleneck score using fixture data.
 
 See [docs/REBUILD_PLAN.md](docs/REBUILD_PLAN.md) for the delivery plan and
 [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) for the research design.
+
+The fixed destination for this rebuild is [docs/V1_RELEASE_SPEC.md](docs/V1_RELEASE_SPEC.md).
+It defines the v1 coverage, deliverables, acceptance criteria, and stopping
+rule.

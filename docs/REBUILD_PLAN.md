@@ -1,46 +1,42 @@
 # Atlas Rebuild Plan
 
-## Product goal
+This plan is deliberately finite. The destination and stopping rule are in
+[V1_RELEASE_SPEC.md](V1_RELEASE_SPEC.md); this file only describes the order of
+work needed to reach it.
 
-Build a reproducible monitor that helps a researcher distinguish AI
-infrastructure demand from infrastructure that can actually be delivered. The
-product must connect each conclusion to source observations, timestamps,
-vintages, units, transformations, and uncertainty.
+## Phase 1 — Contract and core (complete)
 
-## Delivery sequence
+- Product thesis, fixed scope, evidence rules, and v1 acceptance criteria.
+- Immutable observations, provenance, graph validation, and scoring.
+- Deterministic fixture ranking and versioned export contract.
 
-1. **Research contract** — define the thesis, regions, metrics, evidence rules,
-   and explicit non-goals.
-2. **Domain core** — immutable graph, observations, provenance, derived metrics,
-   and validation tests.
-3. **First insight slice** — fixture-backed regional pressure scoring with
-   component attribution, missing-data handling, and confidence labels.
-4. **Data layer** — isolated adapters for EIA, SEC EDGAR, FRED, and published
-   scenario datasets; raw responses are cached and checksummed.
-5. **Analytical layer** — time-series normalisation, seasonal baselines,
-   company capex extraction, regional aggregation, sensitivity analysis, and
-   backtests of signal stability.
-6. **Research layer** — generated evidence tables and human-readable insight
-   cards that explain what changed, why it matters, and what could falsify it.
-7. **Web layer** — static, inspectable map and dashboard with source drill-down,
-   not a black-box scorecard.
-8. **Operations** — clean-checkout setup, refresh manifests, CI, data-quality
-   reports, and documented release snapshots.
+## Phase 2 — Live refresh layer (next)
 
-## Quality gates
+- EIA refresh for the seven fixed balancing authorities.
+- SEC refresh for the eight fixed public companies.
+- Raw response caching, checksums, schema validation, and refresh manifest.
+- Safe failure semantics: failed refreshes do not look current.
 
-- Every metric has a definition, unit, frequency, source, vintage, and owner.
-- Derived values preserve their input IDs and transformation version.
-- Unit tests use deterministic fixtures; live APIs are never required for tests.
-- Scores expose components and confidence rather than presenting false precision.
-- Missing observations reduce confidence or suppress a conclusion; they never
-  silently become zero.
-- Historical revisions are retained as vintages where the source allows it.
-- Research claims include a counter-signal or caveat.
-- Generated datasets are reproducible from a refresh manifest and are not
-  committed by default.
+## Phase 3 — Research pipeline
 
-## Current checkpoint
+- Connect live observations to the existing demand, supply, and price transforms.
+- Add filed capex trend calculations and company evidence tables.
+- Add the separate execution-friction evidence panel from authoritative reports.
+- Add sensitivity checks for lookback windows and component weights.
 
-The graph model and validation tests are complete. The next implementation
-slice adds typed observations and a transparent regional bottleneck score.
+## Phase 4 — Report and release
+
+- Generate the static report and JSON export from one snapshot.
+- Add source drill-down, methodology, missing-data, and caveat sections.
+- Add `make setup`, `make test`, `make refresh`, and `make report`.
+- Run clean-checkout, coverage, security, and reproducibility gates.
+
+## Scope-control rules
+
+- Work must map to one v1 acceptance criterion or fix a release blocker.
+- New data sources require removing or deferring something else in v1.
+- No UI polish before the live pipeline can produce a complete snapshot.
+- No composite component is added without a comparable source and a testable
+  definition.
+- Once v1 acceptance passes, stop and release; do not continue polishing inside
+  the v1 milestone.
