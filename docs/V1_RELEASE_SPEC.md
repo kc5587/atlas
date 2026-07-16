@@ -51,6 +51,9 @@ press-reported capex are excluded.
 - Company history: latest five fiscal years available through EDGAR.
 - Refresh cadence: weekly snapshot, with the exact retrieval time recorded.
 - v1 is a snapshot product, not a real-time monitoring service.
+- Wholesale price history is supplied through the official EIA spreadsheet
+  export converted to CSV; `WHOLESALE_PRICE_CSV` is optional, and regions with
+  no supported hub history are explicitly marked unavailable.
 
 ## Fixed analytical output
 

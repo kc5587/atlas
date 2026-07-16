@@ -10,26 +10,29 @@ work needed to reach it.
 - Immutable observations, provenance, graph validation, and scoring.
 - Deterministic fixture ranking and versioned export contract.
 
-## Phase 2 — Live refresh layer (next)
+## Phase 2 — Live refresh layer (complete)
 
 - EIA refresh for the seven fixed balancing authorities.
 - SEC refresh for the eight fixed public companies.
 - Raw response caching, checksums, schema validation, and refresh manifest.
 - Safe failure semantics: failed refreshes do not look current.
 
-## Phase 3 — Research pipeline
+## Phase 3 — Research pipeline (complete)
 
 - Connect live observations to the existing demand, supply, and price transforms.
 - Add filed capex trend calculations and company evidence tables.
 - Add the separate execution-friction evidence panel from authoritative reports.
 - Add sensitivity checks for lookback windows and component weights.
 
-## Phase 4 — Report and release
+## Phase 4 — Report and release (complete)
 
 - Generate the static report and JSON export from one snapshot.
 - Add source drill-down, methodology, missing-data, and caveat sections.
 - Add `make setup`, `make test`, `make refresh`, and `make report`.
 - Run clean-checkout, coverage, security, and reproducibility gates.
+
+Release verification passed: 46 tests, 89.4% package coverage, deterministic
+fixture snapshot/report generation, Python compilation, and diff hygiene.
 
 ## Scope-control rules
 

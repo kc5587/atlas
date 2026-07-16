@@ -4,12 +4,71 @@ import json
 from collections.abc import Mapping
 from datetime import date
 from pathlib import Path
+from typing import Callable, Protocol
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from atlas.evidence import EvidenceKind, Observation, SourceRef, Temporal
 
 
 class SECDataError(ValueError):
     """Raised when Company Facts lacks a supported capex fact."""
+
+
+class SECFetchError(RuntimeError):
+    """Raised when the SEC Company Facts endpoint cannot be reached."""
+
+
+class HTTPResponse(Protocol):
+    """Minimal response surface required by the SEC client."""
+
+    def __enter__(self) -> "HTTPResponse": ...
+
+    def __exit__(self, *_: object) -> None: ...
+
+    def read(self) -> bytes: ...
+
+
+Opener = Callable[..., HTTPResponse]
+SEC_COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+SEC_SOURCE = SourceRef(
+    id="sec:companyfacts",
+    url="https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+    publisher="U.S. Securities and Exchange Commission",
+)
+
+
+class SECClient:
+    """Fetch Company Facts with SEC-identifying headers and bounded timeouts."""
+
+    def __init__(
+        self,
+        user_agent: str,
+        timeout_seconds: float = 30.0,
+        opener: Opener = urlopen,
+    ) -> None:
+        if not user_agent.strip():
+            raise ValueError("SEC user_agent is required")
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        self._user_agent = user_agent
+        self._timeout_seconds = timeout_seconds
+        self._opener = opener
+
+    def fetch_company_facts(self, cik: str) -> Mapping[str, object]:
+        """Fetch one company's XBRL Company Facts document."""
+
+        normalized_cik = _normalize_cik(cik)
+        request = Request(
+            SEC_COMPANYFACTS_URL.format(cik=normalized_cik),
+            headers={"User-Agent": self._user_agent, "Accept": "application/json"},
+        )
+        try:
+            with self._opener(request, timeout=self._timeout_seconds) as response:
+                payload = json.loads(response.read())
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            raise SECFetchError("could not fetch SEC data") from error
+        return _mapping(payload)
 
 
 CAPEX_CONCEPTS = (
@@ -40,12 +99,20 @@ def parse_capex_observations(
     raise SECDataError("no supported capex fact")
 
 
+def _normalize_cik(cik: str) -> str:
+    if not cik.isdigit():
+        raise ValueError("cik must contain only digits")
+    return cik.zfill(10)
+
+
 def _load_payload(payload_or_path: Mapping[str, object] | Path) -> Mapping[str, object]:
     if isinstance(payload_or_path, Path):
         try:
             return _mapping(json.loads(payload_or_path.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError) as error:
-            raise SECDataError(f"could not read Company Facts payload: {payload_or_path}") from error
+            raise SECDataError(
+                f"could not read Company Facts payload: {payload_or_path}"
+            ) from error
     return payload_or_path
 
 

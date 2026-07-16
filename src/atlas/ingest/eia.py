@@ -2,8 +2,8 @@
 
 import json
 from collections.abc import Mapping
-from datetime import date, datetime, timezone
 from dataclasses import dataclass, replace
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable, Protocol
 from urllib.error import URLError
@@ -89,6 +89,23 @@ class EIAClient:
     def fetch_hourly_demand(self, query: EIAHourlyQuery) -> tuple[Observation, ...]:
         """Fetch, decode, and validate hourly demand observations."""
 
+        payload = self.fetch_hourly_payload(query)
+        return parse_hourly_demand(payload, EIA_SOURCE, datetime.now(timezone.utc))
+
+    def fetch_hourly_operating(
+        self, query: EIAHourlyQuery
+    ) -> tuple[Observation, ...]:
+        """Fetch demand and net-generation rows from one source response."""
+
+        payload = self.fetch_hourly_payload(query)
+        retrieved_at = datetime.now(timezone.utc)
+        return parse_hourly_demand(
+            payload, EIA_SOURCE, retrieved_at
+        ) + parse_hourly_generation(payload, EIA_SOURCE, retrieved_at)
+
+    def fetch_hourly_payload(self, query: EIAHourlyQuery) -> Mapping[str, object]:
+        """Fetch a raw EIA response for caching and independent parsing."""
+
         effective_query = query
         if query.api_key is None and self._api_key is not None:
             effective_query = replace(query, api_key=self._api_key)
@@ -101,7 +118,9 @@ class EIAClient:
                 payload = json.loads(response.read())
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
             raise EIAFetchError("could not fetch EIA data") from error
-        return parse_hourly_demand(payload, EIA_SOURCE, datetime.now(timezone.utc))
+        if not isinstance(payload, Mapping):
+            raise EIADataError("EIA response must be an object")
+        return payload
 
 
 def parse_hourly_demand(
@@ -186,7 +205,7 @@ def _parse_metric_row(
     except (KeyError, TypeError, ValueError) as error:
         raise EIADataError(f"invalid {metric_id} value or timestamp") from error
     if not respondent.strip():
-        raise EIADataError("demand row has no respondent")
+        raise EIADataError(f"{metric_id} row has no respondent")
     return Observation(
         id=f"eia:{metric_id}:{respondent}:{period.isoformat()}",
         metric_id=metric_id,

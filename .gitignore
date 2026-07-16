@@ -6,6 +6,8 @@ __pycache__/
 *.duckdb
 *.parquet
 data/
+!data/fixtures/
+!data/fixtures/**
 dist/
 node_modules/
 coverage/
