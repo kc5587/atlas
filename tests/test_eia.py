@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from atlas.evidence import EvidenceKind, SourceRef
-from atlas.ingest.eia import EIADataError, parse_hourly_demand
+from atlas.ingest.eia import EIADataError, parse_hourly_demand, parse_hourly_generation
 
 
 FIXTURE = Path("data/fixtures/eia_hourly_demand.json")
@@ -57,3 +57,15 @@ def test_parser_rejects_missing_data_rows() -> None:
             source=SOURCE,
             retrieved_at=date(2026, 7, 3),
         )
+
+
+def test_parser_can_extract_net_generation_for_supply_analysis() -> None:
+    observations = parse_hourly_generation(
+        FIXTURE,
+        source=SOURCE,
+        retrieved_at=date(2026, 7, 3),
+    )
+
+    assert len(observations) == 1
+    assert observations[0].metric_id == "net_generation"
+    assert observations[0].value == 79_000.0

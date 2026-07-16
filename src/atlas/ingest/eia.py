@@ -109,7 +109,41 @@ def parse_hourly_demand(
     source: SourceRef,
     retrieved_at: Temporal,
 ) -> tuple[Observation, ...]:
-    """Convert demand rows into timestamped observations, ignoring other series."""
+    """Convert demand rows into timestamped observations."""
+
+    return _parse_hourly_metric(
+        payload_or_path,
+        source,
+        retrieved_at,
+        metric_id="demand",
+        accepted_series={"demand", "d"},
+    )
+
+
+def parse_hourly_generation(
+    payload_or_path: Mapping[str, object] | Path,
+    source: SourceRef,
+    retrieved_at: Temporal,
+) -> tuple[Observation, ...]:
+    """Convert net-generation rows into timestamped observations."""
+
+    return _parse_hourly_metric(
+        payload_or_path,
+        source,
+        retrieved_at,
+        metric_id="net_generation",
+        accepted_series={"net generation", "ng"},
+    )
+
+
+def _parse_hourly_metric(
+    payload_or_path: Mapping[str, object] | Path,
+    source: SourceRef,
+    retrieved_at: Temporal,
+    metric_id: str,
+    accepted_series: set[str],
+) -> tuple[Observation, ...]:
+    """Extract one EIA operating series while ignoring other row types."""
 
     payload = _load_payload(payload_or_path)
     response = _mapping(payload.get("response"))
@@ -121,12 +155,12 @@ def parse_hourly_demand(
     for raw_row in raw_rows:
         row = _mapping(raw_row)
         series_name = str(row.get("type-name", row.get("type", ""))).lower()
-        if series_name not in {"demand", "d"}:
+        if series_name not in accepted_series:
             continue
-        observations.append(_parse_demand_row(row, source, retrieved_at))
+        observations.append(_parse_metric_row(row, source, retrieved_at, metric_id))
 
     if not observations:
-        raise EIADataError("no hourly demand rows")
+        raise EIADataError(f"no hourly {metric_id} rows")
     return tuple(observations)
 
 
@@ -139,20 +173,23 @@ def _load_payload(payload_or_path: Mapping[str, object] | Path) -> Mapping[str, 
     return payload_or_path
 
 
-def _parse_demand_row(
-    row: Mapping[str, object], source: SourceRef, retrieved_at: Temporal
+def _parse_metric_row(
+    row: Mapping[str, object],
+    source: SourceRef,
+    retrieved_at: Temporal,
+    metric_id: str,
 ) -> Observation:
     try:
         period = _parse_timestamp(row["period"])
         respondent = str(row["respondent"])
         value = float(row["value"])
     except (KeyError, TypeError, ValueError) as error:
-        raise EIADataError("invalid demand value or timestamp") from error
+        raise EIADataError(f"invalid {metric_id} value or timestamp") from error
     if not respondent.strip():
         raise EIADataError("demand row has no respondent")
     return Observation(
-        id=f"eia:demand:{respondent}:{period.isoformat()}",
-        metric_id="demand",
+        id=f"eia:{metric_id}:{respondent}:{period.isoformat()}",
+        metric_id=metric_id,
         entity_id=respondent,
         period_start=period,
         period_end=period,
