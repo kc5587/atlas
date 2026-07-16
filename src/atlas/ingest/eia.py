@@ -3,13 +3,105 @@
 import json
 from collections.abc import Mapping
 from datetime import date, datetime, timezone
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Callable, Protocol
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from atlas.evidence import EvidenceKind, Observation, SourceRef, Temporal
 
 
 class EIADataError(ValueError):
     """Raised when an EIA response cannot satisfy the Atlas data contract."""
+
+
+class EIAFetchError(RuntimeError):
+    """Raised when the EIA endpoint cannot be reached or decoded."""
+
+
+class HTTPResponse(Protocol):
+    """Minimal response surface required by the client."""
+
+    def __enter__(self) -> "HTTPResponse": ...
+
+    def __exit__(self, *_: object) -> None: ...
+
+    def read(self) -> bytes: ...
+
+
+Opener = Callable[..., HTTPResponse]
+EIA_HOURLY_URL = "https://api.eia.gov/v2/electricity/rto/region-data/data/"
+EIA_SOURCE = SourceRef(
+    id="eia:grid-monitor",
+    url="https://www.eia.gov/electricity/gridmonitor/about",
+    publisher="U.S. Energy Information Administration",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class EIAHourlyQuery:
+    """A bounded query for balancing-authority hourly operating data."""
+
+    regions: tuple[str, ...]
+    start: date
+    end: date
+    api_key: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.regions or any(not region.strip() for region in self.regions):
+            raise ValueError("at least one non-empty EIA region is required")
+        if self.start > self.end:
+            raise ValueError("EIA query start must not be after end")
+
+
+def build_hourly_query_url(query: EIAHourlyQuery) -> str:
+    """Build a bounded URL without logging or embedding credentials elsewhere."""
+
+    params: list[tuple[str, str]] = [
+        ("data[]", "value"),
+        ("frequency", "hourly"),
+        ("start", query.start.isoformat()),
+        ("end", query.end.isoformat()),
+    ]
+    params.extend(("facets[respondent][]", region) for region in query.regions)
+    if query.api_key:
+        params.append(("api_key", query.api_key))
+    return f"{EIA_HOURLY_URL}?{urlencode(params)}"
+
+
+class EIAClient:
+    """Fetch EIA data through an injectable, timeout-bounded transport."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        timeout_seconds: float = 30.0,
+        opener: Opener = urlopen,
+    ) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        self._api_key = api_key
+        self._timeout_seconds = timeout_seconds
+        self._opener = opener
+
+    def fetch_hourly_demand(self, query: EIAHourlyQuery) -> tuple[Observation, ...]:
+        """Fetch, decode, and validate hourly demand observations."""
+
+        effective_query = query
+        if query.api_key is None and self._api_key is not None:
+            effective_query = replace(query, api_key=self._api_key)
+        request = Request(
+            build_hourly_query_url(effective_query),
+            headers={"User-Agent": "Atlas/0.1 (+https://github.com/kc5587/atlas)"},
+        )
+        try:
+            with self._opener(request, timeout=self._timeout_seconds) as response:
+                payload = json.loads(response.read())
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            raise EIAFetchError("could not fetch EIA data") from error
+        return parse_hourly_demand(payload, EIA_SOURCE, datetime.now(timezone.utc))
 
 
 def parse_hourly_demand(

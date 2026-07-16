@@ -35,13 +35,14 @@ class InsightCard:
     score: BottleneckScore
 
 
-def load_signal_fixture(path: Path) -> tuple[RegionalSnapshot, ...]:
+def load_signal_fixture(path: Path | str) -> tuple[RegionalSnapshot, ...]:
     """Load deterministic, schema-checked regional signals for development."""
 
+    fixture_path = Path(path)
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(fixture_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"could not read signal fixture: {path}") from error
+        raise ValueError(f"could not read signal fixture: {fixture_path}") from error
 
     regions = payload.get("regions") if isinstance(payload, dict) else None
     if not isinstance(regions, list):
