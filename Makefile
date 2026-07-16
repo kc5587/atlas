@@ -1,9 +1,9 @@
-.PHONY: setup test refresh report fixture-report
+.PHONY: setup test refresh report fixture-report validation
 
 PYTHONPATH := src
 PYTEST ?= pytest
-SNAPSHOT_START ?= 2025-07-01
-SNAPSHOT_END ?= 2026-07-01
+SNAPSHOT_START ?= 2022-01-01
+SNAPSHOT_END ?= 2025-12-31
 SNAPSHOT_DIR ?= data/snapshots
 WHOLESALE_PRICE_CSV ?=
 
@@ -29,3 +29,9 @@ fixture-report:
 		--output-dir $$root; \
 	PYTHONPATH=$(PYTHONPATH) python3 scripts/generate_report.py \
 		--snapshot-dir $$root/fixture --output-dir $$root/report
+
+validation:
+	@test -n "$(LIVE_SNAPSHOT)" || (echo "LIVE_SNAPSHOT is required"; exit 1)
+	PYTHONPATH=$(PYTHONPATH) python3 scripts/run_validation.py \
+		--snapshot-dir $(LIVE_SNAPSHOT) --output-dir $(VALIDATION_OUTPUT) \
+		$(if $(BENCHMARK_JSON),--benchmark-json $(BENCHMARK_JSON),)

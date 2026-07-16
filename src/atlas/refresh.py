@@ -15,7 +15,9 @@ from atlas.ingest.eia import (
     parse_hourly_demand,
     parse_hourly_generation,
 )
-from atlas.ingest.sec import SEC_SOURCE, parse_capex_observations
+from atlas.ingest.sec import SECDataError, SEC_SOURCE, parse_capex_observations
+from atlas.ingest.eia930 import EIA930_SOURCE, parse_eia930_files
+from atlas.ingest.nyiso import NYISO_SOURCE, parse_nyiso_lbmp_zip
 from atlas.ingest.wholesale import WHOLESALE_SOURCE, parse_wholesale_csv
 from atlas.snapshot import (
     SnapshotManifest,
@@ -61,6 +63,8 @@ class RefreshConfig:
     eia_api_key: str | None = None
     sec_user_agent: str = ""
     wholesale_price_csv: Path | None = None
+    nyiso_price_zips: tuple[Path, ...] = ()
+    eia930_balance_csvs: tuple[Path, ...] = ()
 
     def __post_init__(self) -> None:
         companies = self.companies
@@ -69,6 +73,8 @@ class RefreshConfig:
         elif isinstance(companies, Mapping):
             companies = tuple(sorted(companies.items()))
         object.__setattr__(self, "companies", tuple(companies))
+        object.__setattr__(self, "nyiso_price_zips", tuple(self.nyiso_price_zips))
+        object.__setattr__(self, "eia930_balance_csvs", tuple(self.eia930_balance_csvs))
         if not self.snapshot_id.strip() or self.start > self.end:
             raise ValueError("invalid snapshot identity or date range")
         if not self.regions or not self.companies:
@@ -126,10 +132,24 @@ def _refresh_eia(
         end=config.end,
         api_key=config.eia_api_key,
     )
-    payload = client.fetch_hourly_payload(query)
     retrieved_at = config.generated_at
-    demand = parse_hourly_demand(payload, EIA_SOURCE, retrieved_at)
-    generation = parse_hourly_generation(payload, EIA_SOURCE, retrieved_at)
+    if config.eia930_balance_csvs:
+        operating = parse_eia930_files(
+            config.eia930_balance_csvs, config.regions, retrieved_at
+        )
+        demand = tuple(item for item in operating if item.metric_id == "demand")
+        generation = tuple(
+            item for item in operating if item.metric_id == "net_generation"
+        )
+        payload: Mapping[str, object] = {
+            "source": "eia930_bulk_balance",
+            "files": [str(path) for path in config.eia930_balance_csvs],
+            "row_count": len(operating),
+        }
+    else:
+        payload = client.fetch_hourly_payload(query)
+        demand = parse_hourly_demand(payload, EIA_SOURCE, retrieved_at)
+        generation = parse_hourly_generation(payload, EIA_SOURCE, retrieved_at)
     price_observations = ()
     raw_path = staging_dir / "raw/eia_operating.json"
     observation_path = staging_dir / "curated/eia_observations.json"
@@ -139,6 +159,20 @@ def _refresh_eia(
             staging_dir, raw_path, EIA_SOURCE, _raw_row_count(payload), retrieved_at
         ),
     ]
+    if config.eia930_balance_csvs:
+        for balance_path in config.eia930_balance_csvs:
+            raw_balance_path = staging_dir / "raw/eia930" / balance_path.name
+            raw_balance_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(balance_path, raw_balance_path)
+            artifacts.append(
+                _artifact(
+                    staging_dir,
+                    raw_balance_path,
+                    EIA930_SOURCE,
+                    0,
+                    retrieved_at,
+                )
+            )
     if config.wholesale_price_csv is not None:
         price_observations = parse_wholesale_csv(
             config.wholesale_price_csv, WHOLESALE_SOURCE, retrieved_at
@@ -154,7 +188,23 @@ def _refresh_eia(
                 retrieved_at,
             )
         )
-    all_observations = demand + generation + price_observations
+    nyiso_observations = ()
+    for nyiso_zip in config.nyiso_price_zips:
+        parsed = parse_nyiso_lbmp_zip(nyiso_zip, NYISO_SOURCE, retrieved_at)
+        nyiso_observations += parsed
+        raw_nyiso_path = staging_dir / "raw/nyiso" / nyiso_zip.name
+        raw_nyiso_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(nyiso_zip, raw_nyiso_path)
+        artifacts.append(
+            _artifact(
+                staging_dir,
+                raw_nyiso_path,
+                NYISO_SOURCE,
+                len(parsed),
+                retrieved_at,
+            )
+        )
+    all_observations = demand + generation + price_observations + nyiso_observations
     write_observations(observation_path, all_observations)
     artifacts.append(
         _artifact(
@@ -178,15 +228,18 @@ def _refresh_sec(
     artifacts: list[dict[str, object]] = []
     for company, cik in config.companies:
         payload = client.fetch_company_facts(cik)
-        observations = parse_capex_observations(
-            payload, cik, SEC_SOURCE, config.generated_at
-        )
         slug = _slug(company)
         raw_path = raw_dir / f"{slug}.json"
         write_json_document(raw_path, payload)
         artifacts.append(
             _artifact(staging_dir, raw_path, SEC_SOURCE, 1, config.generated_at)
         )
+        try:
+            observations = parse_capex_observations(
+                payload, cik, SEC_SOURCE, config.generated_at
+            )
+        except SECDataError:
+            observations = ()
         all_observations.extend(observations)
     observation_path = staging_dir / "curated/sec_capex.json"
     write_observations(observation_path, tuple(all_observations))

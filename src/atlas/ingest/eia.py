@@ -1,12 +1,13 @@
 """Parsing for EIA balancing-authority hourly operating data."""
 
 import json
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable, Protocol
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -56,14 +57,20 @@ class EIAHourlyQuery:
             raise ValueError("EIA query start must not be after end")
 
 
-def build_hourly_query_url(query: EIAHourlyQuery) -> str:
+def build_hourly_query_url(
+    query: EIAHourlyQuery, offset: int = 0, length: int = 5000
+) -> str:
     """Build a bounded URL without logging or embedding credentials elsewhere."""
 
+    if offset < 0 or length <= 0:
+        raise ValueError("offset must be non-negative and length must be positive")
     params: list[tuple[str, str]] = [
         ("data[]", "value"),
         ("frequency", "hourly"),
         ("start", query.start.isoformat()),
         ("end", query.end.isoformat()),
+        ("offset", str(offset)),
+        ("length", str(length)),
     ]
     params.extend(("facets[respondent][]", region) for region in query.regions)
     if query.api_key:
@@ -104,20 +111,65 @@ class EIAClient:
         ) + parse_hourly_generation(payload, EIA_SOURCE, retrieved_at)
 
     def fetch_hourly_payload(self, query: EIAHourlyQuery) -> Mapping[str, object]:
-        """Fetch a raw EIA response for caching and independent parsing."""
+        """Fetch all pages of one EIA query for caching and independent parsing."""
 
         effective_query = query
         if query.api_key is None and self._api_key is not None:
             effective_query = replace(query, api_key=self._api_key)
+        offset = 0
+        page_size = 5000
+        pages: list[Mapping[str, object]] = []
+        total: int | None = None
+        while True:
+            if pages:
+                time.sleep(1.0)
+            payload = self._fetch_page(effective_query, offset, page_size)
+            response = _mapping(payload.get("response"))
+            raw_rows = response.get("data")
+            if not isinstance(raw_rows, list):
+                raise EIADataError("response data must be a list")
+            pages.append(payload)
+            raw_total = response.get("total")
+            if raw_total is not None:
+                try:
+                    total = int(raw_total)
+                except (TypeError, ValueError) as error:
+                    raise EIADataError("EIA response total must be an integer") from error
+            received = sum(
+                len(_mapping(page.get("response")).get("data", [])) for page in pages
+            )
+            if not raw_rows or (total is None and len(raw_rows) < page_size):
+                break
+            if total is not None and received >= total:
+                break
+            offset += page_size
+        return _merge_pages(pages)
+
+    def _fetch_page(
+        self, query: EIAHourlyQuery, offset: int, length: int
+    ) -> Mapping[str, object]:
         request = Request(
-            build_hourly_query_url(effective_query),
+            build_hourly_query_url(query, offset=offset, length=length),
             headers={"User-Agent": "Atlas/0.1 (+https://github.com/kc5587/atlas)"},
         )
-        try:
-            with self._opener(request, timeout=self._timeout_seconds) as response:
-                payload = json.loads(response.read())
-        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
-            raise EIAFetchError("could not fetch EIA data") from error
+        for attempt in range(4):
+            try:
+                with self._opener(request, timeout=self._timeout_seconds) as response:
+                    payload = json.loads(response.read())
+                break
+            except HTTPError as error:
+                if error.code != 429 or attempt == 3:
+                    raise EIAFetchError("could not fetch EIA data") from error
+                retry_after = error.headers.get("Retry-After") if error.headers else None
+                try:
+                    delay = float(retry_after) if retry_after else 2.0**attempt
+                except ValueError:
+                    delay = 2.0**attempt
+                time.sleep(min(60.0, max(1.0, delay)))
+            except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+                raise EIAFetchError("could not fetch EIA data") from error
+        else:
+            raise EIAFetchError("could not fetch EIA data")
         if not isinstance(payload, Mapping):
             raise EIADataError("EIA response must be an object")
         return payload
@@ -238,3 +290,27 @@ def _mapping(value: object) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise EIADataError("EIA payload contains an invalid object")
     return value
+
+
+def _merge_pages(pages: list[Mapping[str, object]]) -> Mapping[str, object]:
+    first_response = _mapping(pages[0].get("response"))
+    rows: dict[tuple[object, ...], Mapping[str, object]] = {}
+    for page in pages:
+        response = _mapping(page.get("response"))
+        raw_rows = response.get("data")
+        if not isinstance(raw_rows, list):
+            raise EIADataError("response data must be a list")
+        for raw_row in raw_rows:
+            row = _mapping(raw_row)
+            key = (
+                row.get("period"),
+                row.get("respondent"),
+                row.get("type-name", row.get("type")),
+            )
+            rows[key] = row
+    merged_response = dict(first_response)
+    merged_response["data"] = list(rows.values())
+    merged_response["total"] = str(len(rows))
+    merged = dict(pages[0])
+    merged["response"] = merged_response
+    return merged

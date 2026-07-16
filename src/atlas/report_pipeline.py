@@ -22,6 +22,7 @@ def build_report_from_observations(
     company_labels: Mapping[str, str],
     as_of: date,
     generated_at: date | datetime,
+    analysis: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Create a complete report while keeping partial regions visible."""
 
@@ -45,6 +46,7 @@ def build_report_from_observations(
         company_labels=company_labels,
         generated_at=generated_at,
         dataset_status="complete" if not unavailable else "partial",
+        analysis=analysis,
     )
 
 
@@ -52,6 +54,7 @@ def build_report_from_snapshot(
     snapshot_dir: Path,
     region_ids: tuple[str, ...],
     company_labels: Mapping[str, str],
+    analysis: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Load one published snapshot and build its report payload."""
 
@@ -76,6 +79,7 @@ def build_report_from_snapshot(
         company_labels=company_labels,
         as_of=max(demand_dates),
         generated_at=datetime.fromisoformat(manifest["generated_at"]),
+        analysis=analysis,
     )
 
 

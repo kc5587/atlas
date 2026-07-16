@@ -58,6 +58,7 @@ def build_report_export(
     company_labels: Mapping[str, str],
     generated_at: date | datetime,
     dataset_status: str,
+    analysis: Mapping[str, object] | None = None,
 ) -> dict[str, Any]:
     """Build the complete v1 report payload."""
 
@@ -68,6 +69,8 @@ def build_report_export(
     ]
     report["companies"] = _serialize_capex(capex_observations, company_labels)
     report["execution_evidence"] = [dict(item) for item in EXECUTION_EVIDENCE]
+    if analysis:
+        report.update({key: value for key, value in analysis.items()})
     return report
 
 
@@ -92,10 +95,30 @@ def render_report_html(report: Mapping[str, Any]) -> str:
     company_rows = "".join(
         _company_row(company) for company in report.get("companies", ())
     )
+    history_cards = "".join(
+        _history_card(item) for item in report.get("history", ())
+    )
+    backtest_rows = "".join(
+        _backtest_row(item)
+        for item in report.get("backtest", {}).get("summaries", ())
+    )
+    sensitivity_rows = "".join(
+        _sensitivity_row(item)
+        for item in report.get("sensitivity", {}).get("region_summary", ())
+    )
+    benchmark_rows = "".join(
+        _benchmark_row(item)
+        for item in report.get("interconnection_benchmark", {}).get("regions", ())
+    )
+    validation = report.get("validation", {})
+    validation_status = "passed" if validation.get("passed") else "review required"
+    coverage_rows = "".join(
+        _coverage_row(item) for item in validation.get("coverage", ())
+    )
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Atlas v1</title>
+<html lang="en"><head><meta charset="utf-8"><title>Atlas v1.1</title>
 <style>{_css()}</style></head><body>
-<main><header><p class="eyebrow">ATLAS V1 · AI INFRASTRUCTURE BOTTLENECK MONITOR</p>
+<main><header><p class="eyebrow">ATLAS V1.1 · AI INFRASTRUCTURE BOTTLENECK MONITOR</p>
 <h1>Where is AI infrastructure under pressure?</h1>
 <p class="lede">Snapshot: {escape(str(report.get('generated_at', 'unknown')))} ·
 Status: <strong>{escape(str(report.get('dataset_status', 'unknown')))}</strong></p></header>
@@ -103,9 +126,15 @@ Status: <strong>{escape(str(report.get('dataset_status', 'unknown')))}</strong><
 <th>Region</th><th>Pressure</th><th>Confidence</th><th>Missing</th><th>Evidence</th>
 </tr></thead><tbody>{region_rows}{unavailable_rows}</tbody></table></section>
 <section><h2>Regional detail cards</h2><div class="cards">{region_cards}</div></section>
+<section><h2>Historical pressure path</h2><div class="history">{history_cards or '<p>No score history supplied.</p>'}</div></section>
+<section><h2>Historical validation</h2><p class="status">{escape(validation_status)}</p>
+<p>{escape(str(validation.get('observation_count', 'unknown')))} observations; the coverage table makes source gaps visible.</p><table><thead><tr><th>Region</th><th>Demand days</th><th>Generation days</th><th>Price days</th><th>Range</th></tr></thead><tbody>{coverage_rows or '<tr><td colspan="5">No coverage details supplied.</td></tr>'}</tbody></table></section>
+<section><h2>Backtest summary</h2><table><thead><tr><th>Horizon</th><th>Observations</th><th>Rank correlation</th><th>Mean future delta</th></tr></thead><tbody>{backtest_rows or '<tr><td colspan="4">No backtest supplied.</td></tr>'}</tbody></table></section>
+<section><h2>Sensitivity range</h2><table><thead><tr><th>Region</th><th>Scenarios</th><th>Min</th><th>Max</th><th>Range</th></tr></thead><tbody>{sensitivity_rows or '<tr><td colspan="5">No sensitivity analysis supplied.</td></tr>'}</tbody></table></section>
 <section><h2>Company capital commitment</h2><table><thead><tr>
 <th>Company</th><th>Latest filed capex</th><th>Prior filed capex</th><th>Change</th><th>Vintage</th>
 </tr></thead><tbody>{company_rows}</tbody></table></section>
+<section><h2>Interconnection benchmark</h2><table><thead><tr><th>Region</th><th>Active MW</th><th>Withdrawal rate</th><th>Operational projects</th><th>Median years</th></tr></thead><tbody>{benchmark_rows or '<tr><td colspan="5">No Berkeley Lab queue benchmark supplied.</td></tr>'}</tbody></table></section>
 <section><h2>Execution-friction evidence</h2><ul>
 {execution_rows}</ul></section>
 <section><h2>Method and caveats</h2><p>
@@ -249,6 +278,82 @@ section p{max-width:800px;color:#555}
 .card h3{margin-top:0;font:700 18px ui-monospace,monospace}
 .card-score{font-size:2.6rem;margin:8px 0}.card-score span{font-size:.9rem;color:#777}
 .card ul{padding-left:20px}.muted{color:#777}.unavailable{background:#eee}
+.history{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.history-card{background:#fff;border:1px solid #ddd;padding:16px}.history-card h3{margin:0 0 8px;font:700 16px ui-monospace,monospace}.history-card svg{width:100%;height:56px}.history-meta{font:12px ui-monospace,monospace;color:#666}.status{font:700 14px ui-monospace,monospace;text-transform:uppercase}
 .evidence-kind{font:700 11px ui-monospace,monospace;text-transform:uppercase;
 padding:2px 5px;border-radius:3px}
 .observed{background:#d7eadb}.estimated{background:#f6dfad}.inferred{background:#ded3ef}"""
+
+
+def _history_card(item: Mapping[str, Any]) -> str:
+    points = item.get("points", ())
+    if not points:
+        return ""
+    values = [float(point["pressure"]) for point in points]
+    latest = points[-1]
+    return (
+        f"<article class='history-card'><h3>{escape(str(item['region_id']))}</h3>"
+        f"{_sparkline(values)}<p class='history-meta'>"
+        f"{escape(str(points[0]['as_of']))} → {escape(str(latest['as_of']))} · "
+        f"latest {latest['pressure']:.1f} · confidence {latest['confidence']:.0%}</p></article>"
+    )
+
+
+def _sparkline(values: list[float]) -> str:
+    if len(values) == 1:
+        values = values + values
+    low, high = min(values), max(values)
+    scale = high - low or 1.0
+    points = " ".join(
+        f"{index / (len(values) - 1) * 160:.1f},{46 - (value - low) / scale * 40:.1f}"
+        for index, value in enumerate(values)
+    )
+    return (
+        "<svg viewBox='0 0 160 50' role='img' aria-label='pressure history'>"
+        f"<polyline fill='none' stroke='#b14b2f' stroke-width='2' points='{points}' />"
+        "</svg>"
+    )
+
+
+def _backtest_row(item: Mapping[str, Any]) -> str:
+    correlation = item.get("spearman_rank_correlation")
+    delta = item.get("mean_future_delta")
+    return (
+        f"<tr><td>{item['horizon_days']} days</td><td>{item['observations']}</td>"
+        f"<td>{'—' if correlation is None else f'{correlation:.2f}'}</td>"
+        f"<td>{'—' if delta is None else f'{delta:.2f}'}</td></tr>"
+    )
+
+
+def _sensitivity_row(item: Mapping[str, Any]) -> str:
+    return (
+        f"<tr><td>{escape(str(item['region_id']))}</td><td>{item['scenario_count']}</td>"
+        f"<td>{_number(item.get('min_pressure'))}</td><td>{_number(item.get('max_pressure'))}</td>"
+        f"<td>{_number(item.get('pressure_range'))}</td></tr>"
+    )
+
+
+def _benchmark_row(item: Mapping[str, Any]) -> str:
+    withdrawal = item.get("withdrawal_rate")
+    years = item.get("median_years_request_to_operation")
+    return (
+        f"<tr><td>{escape(str(item['region_id']))}</td>"
+        f"<td>{float(item['active_capacity_mw']):,.0f}</td>"
+        f"<td>{'—' if withdrawal is None else f'{float(withdrawal):.1%}'}</td>"
+        f"<td>{item['operational_project_count']}</td>"
+        f"<td>{'—' if years is None else f'{float(years):.1f}'}</td></tr>"
+    )
+
+
+def _coverage_row(item: Mapping[str, Any]) -> str:
+    metrics = item.get("metric_days", {})
+    return (
+        f"<tr><td>{escape(str(item['region_id']))}</td>"
+        f"<td>{metrics.get('demand', 0)}</td><td>{metrics.get('net_generation', 0)}</td>"
+        f"<td>{metrics.get('wholesale_price', 0)}</td>"
+        f"<td>{escape(str(item.get('first_date', '—')))} → "
+        f"{escape(str(item.get('last_date', '—')))}</td></tr>"
+    )
+
+
+def _number(value: object) -> str:
+    return "—" if value is None else f"{float(value):.1f}"

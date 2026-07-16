@@ -71,3 +71,29 @@ def test_rejects_duplicate_or_out_of_range_signals() -> None:
             as_of=AS_OF,
             signals=(signal("demand_pressure", 101),),
         )
+
+
+def test_custom_weights_support_sensitivity_analysis() -> None:
+    score = score_region(
+        region_id="ercot",
+        as_of=AS_OF,
+        signals=(
+            signal("demand_pressure", 100),
+            signal("supply_tightness", 0),
+            signal("price_stress", 0),
+            signal("execution_friction", None),
+        ),
+        weights={
+            "demand_pressure": 1.0,
+            "supply_tightness": 0.0,
+            "price_stress": 0.0,
+            "execution_friction": 0.0,
+        },
+    )
+
+    assert score.pressure == 100.0
+
+
+def test_rejects_invalid_custom_weights() -> None:
+    with pytest.raises(ValueError, match="weights must define"):
+        score_region("ercot", AS_OF, (signal("demand_pressure", 50),), weights={})

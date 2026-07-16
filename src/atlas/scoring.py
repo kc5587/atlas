@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 from math import isfinite
+from collections.abc import Mapping
 
 
 COMPONENT_WEIGHTS = {
@@ -69,6 +70,7 @@ def score_region(
     region_id: str,
     as_of: date,
     signals: tuple[ComponentSignal, ...],
+    weights: Mapping[str, float] | None = None,
 ) -> BottleneckScore:
     """Combine available components without treating missing data as zero."""
 
@@ -80,14 +82,15 @@ def score_region(
             raise ValueError(f"duplicate component: {signal.name}")
         by_name[signal.name] = signal
 
-    all_weight = sum(COMPONENT_WEIGHTS.values())
+    effective_weights = _validated_weights(weights)
+    all_weight = sum(effective_weights.values())
     available_weight = 0.0
     weighted_value = 0.0
     weighted_confidence = 0.0
     contributions: list[ComponentContribution] = []
     missing: list[str] = []
 
-    for name, weight in COMPONENT_WEIGHTS.items():
+    for name, weight in effective_weights.items():
         signal = by_name.get(name)
         if signal is None or signal.value is None:
             missing.append(name)
@@ -120,3 +123,20 @@ def score_region(
         components=tuple(contributions),
         missing_components=tuple(missing),
     )
+
+
+def _validated_weights(weights: Mapping[str, float] | None) -> dict[str, float]:
+    effective = dict(COMPONENT_WEIGHTS if weights is None else weights)
+    if set(effective) != set(COMPONENT_WEIGHTS):
+        raise ValueError("weights must define every score component")
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not isfinite(value)
+        or value < 0
+        for value in effective.values()
+    ):
+        raise ValueError("weights must be finite and non-negative")
+    if sum(effective.values()) <= 0:
+        raise ValueError("weights must have positive total")
+    return effective

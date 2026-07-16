@@ -35,3 +35,18 @@ def test_wholesale_parser_rejects_files_without_supported_rows(tmp_path: Path) -
 
     with pytest.raises(WholesaleDataError, match="no supported wholesale rows"):
         parse_wholesale_csv(path, source=SOURCE, retrieved_at=date(2026, 7, 3))
+
+
+def test_wholesale_parser_accepts_eia_workbook_export_headers(tmp_path: Path) -> None:
+    path = tmp_path / "eia-export.csv"
+    path.write_text(
+        "Price hub,Delivery start date,High price $/MWh\n"
+        "ERCOT North 345KV Peak,2025-01-06,58.00\n"
+        "PJM WH Real Time Peak,2025-01-06,70.50\n",
+        encoding="utf-8",
+    )
+
+    observations = parse_wholesale_csv(path, source=SOURCE, retrieved_at=date(2026, 7, 3))
+
+    assert [observation.entity_id for observation in observations] == ["ERCO", "PJM"]
+    assert observations[1].value == 70.5

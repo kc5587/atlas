@@ -73,3 +73,51 @@ def test_client_wraps_transport_errors() -> None:
         client.fetch_hourly_demand(
             EIAHourlyQuery(regions=("ERCO",), start=date(2026, 7, 2), end=date(2026, 7, 2))
         )
+
+
+def test_client_paginates_large_responses() -> None:
+    responses = {
+        0: {
+            "response": {
+                "total": "2",
+                "data": [{"period": "2026-07-01T00:00:00Z", "value": "1"}],
+            }
+        },
+        5000: {
+            "response": {
+                "total": "2",
+                "data": [{"period": "2026-07-01T01:00:00Z", "value": "2"}],
+            }
+        },
+    }
+
+    class Response:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self.payload = payload
+
+        def __enter__(self) -> "Response":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            import json
+
+            return json.dumps(self.payload).encode()
+
+    offsets: list[int] = []
+
+    def opener(request: object, timeout: float) -> Response:
+        query = parse_qs(urlparse(request.full_url).query)
+        offset = int(query.get("offset", ["0"])[0])
+        offsets.append(offset)
+        return Response(responses[offset])
+
+    client = EIAClient(opener=opener)
+    payload = client.fetch_hourly_payload(
+        EIAHourlyQuery(regions=("ERCO",), start=date(2026, 7, 1), end=date(2026, 7, 1))
+    )
+
+    assert offsets == [0, 5000]
+    assert len(payload["response"]["data"]) == 2

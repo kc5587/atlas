@@ -1,4 +1,6 @@
 import json
+from dataclasses import replace
+import zipfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -79,3 +81,23 @@ def test_refresh_failure_does_not_publish_final_snapshot(tmp_path: Path) -> None
     assert not (tmp_path / "test-snapshot" / "manifest.json").exists()
     failure_files = list(tmp_path.glob(".test-snapshot.staging/FAILED.json"))
     assert len(failure_files) == 1
+
+
+def test_refresh_includes_nyiso_price_archive(tmp_path: Path) -> None:
+    nyiso_zip = tmp_path / "202401.zip"
+    csv = (
+        "Time Stamp,Name,PTID,LBMP ($/MWHr),Marginal Cost Losses ($/MWHr),"
+        "Marginal Cost Congestion ($/MWHr)\n"
+        "01/01/2024 00:00,CAPITL,1,10,0,0\n"
+        "01/01/2024 00:00,CENTRL,2,20,0,0\n"
+    )
+    with zipfile.ZipFile(nyiso_zip, "w") as archive:
+        archive.writestr("20240101damlbmp_zone.csv", csv)
+
+    refresh_config = replace(config(tmp_path), nyiso_price_zips=(nyiso_zip,))
+    final_dir = refresh_snapshot(refresh_config, FakeEIAClient(), FakeSECClient())
+
+    observations = json.loads(
+        (final_dir / "curated/eia_observations.json").read_text(encoding="utf-8")
+    )["observations"]
+    assert any(row["entity_id"] == "NYIS" for row in observations)

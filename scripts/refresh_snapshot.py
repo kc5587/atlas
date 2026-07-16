@@ -17,6 +17,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("data/snapshots"))
     parser.add_argument("--snapshot-id", default=None)
     parser.add_argument("--wholesale-price-csv", type=Path, default=None)
+    parser.add_argument("--nyiso-price-root", type=Path, default=None)
+    parser.add_argument("--eia930-balance-root", type=Path, default=None)
     args = parser.parse_args()
     generated_at = datetime.now(timezone.utc)
     snapshot_id = args.snapshot_id or generated_at.strftime("%Y%m%dT%H%M%SZ")
@@ -26,6 +28,16 @@ def main() -> None:
         raise SystemExit("EIA_API_KEY is required for live refresh")
     if not sec_user_agent:
         raise SystemExit("SEC_USER_AGENT is required for live refresh")
+    nyiso_price_zips = ()
+    if args.nyiso_price_root is not None:
+        nyiso_price_zips = tuple(sorted(args.nyiso_price_root.glob("*.zip")))
+        if not nyiso_price_zips:
+            raise SystemExit("--nyiso-price-root contains no ZIP archives")
+    eia930_balance_csvs = ()
+    if args.eia930_balance_root is not None:
+        eia930_balance_csvs = tuple(sorted(args.eia930_balance_root.glob("*.csv")))
+        if not eia930_balance_csvs:
+            raise SystemExit("--eia930-balance-root contains no CSV files")
     config = RefreshConfig(
         output_dir=args.output_dir,
         snapshot_id=snapshot_id,
@@ -37,6 +49,8 @@ def main() -> None:
         eia_api_key=eia_key,
         sec_user_agent=sec_user_agent,
         wholesale_price_csv=args.wholesale_price_csv,
+        nyiso_price_zips=nyiso_price_zips,
+        eia930_balance_csvs=eia930_balance_csvs,
     )
     final_dir = refresh_snapshot(
         config,

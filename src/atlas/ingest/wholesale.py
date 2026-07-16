@@ -1,8 +1,9 @@
 """Parser for EIA's published daily wholesale-price spreadsheet exports."""
 
 import csv
+import re
 from collections.abc import Mapping
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from atlas.evidence import EvidenceKind, Observation, SourceRef, Temporal
@@ -27,6 +28,18 @@ HUB_TO_REGION = {
     "SP-15": "CISO",
     "Mass Hub": "ISNE",
     "Palo Verde": "SWPP",
+}
+
+HUB_ALIASES = {
+    "ERCOT North 345KV Peak": "ERCO",
+    "Indiana Hub RT Peak": "MISO",
+    "PJM WH Real Time Peak": "PJM",
+    "NP15 EZ Gen DA LMP Peak": "CISO",
+    "SP15 Gen DA LMP Peak": "CISO",
+    "SP15 EZ Gen DA LMP Peak": "CISO",
+    "Nepool MH DA LMP Peak": "ISNE",
+    "Mass Hub": "ISNE",
+    "Palo Verde Peak": "SWPP",
 }
 
 
@@ -55,21 +68,29 @@ def parse_wholesale_csv(
 def _parse_row(
     row: Mapping[str, str | None], source: SourceRef, retrieved_at: Temporal
 ) -> Observation | None:
-    hub = _first(row, "Hub", "Price Hub", "Location")
-    region = HUB_TO_REGION.get(hub or "")
+    hub = _first(row, "Hub", "Price Hub", "Price hub", "Location")
+    region = _region_for_hub(hub)
     if region is None:
         return None
-    date_value = _first(row, "Date", "Delivery Date", "Delivery Start Date")
-    price_value = _first(row, "High Price", "High")
+    date_value = _first(
+        row,
+        "Date",
+        "Delivery Date",
+        "Delivery Start Date",
+        "Delivery start date",
+    )
+    price_value = _first(row, "High Price", "High", "High price $/MWh")
     if not date_value or not price_value or price_value in {"-", "NA", "N/A"}:
         return None
     try:
-        period = date.fromisoformat(date_value)
-        value = float(price_value)
+        period = _parse_date(date_value)
+        value = float(price_value.replace(",", "").replace("$", ""))
     except ValueError as error:
         raise WholesaleDataError("invalid wholesale date or price") from error
     return Observation(
-        id=f"eia:wholesale:{region}:{period.isoformat()}",
+        id=(
+            f"eia:wholesale:{region}:{_slug(hub)}:{period.isoformat()}"
+        ),
         metric_id="wholesale_price",
         entity_id=region,
         period_start=period,
@@ -90,3 +111,29 @@ def _first(row: Mapping[str, str | None], *keys: str) -> str | None:
         if value and value.strip():
             return value.strip()
     return None
+
+
+def _region_for_hub(hub: str | None) -> str | None:
+    if not hub:
+        return None
+    normalized = hub.strip()
+    if normalized in HUB_TO_REGION:
+        return HUB_TO_REGION[normalized]
+    for alias, region in HUB_ALIASES.items():
+        if normalized.startswith(alias):
+            return region
+    return None
+
+
+def _parse_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        try:
+            return datetime.fromisoformat(value).date()
+        except ValueError:
+            return datetime.strptime(value, "%m/%d/%Y").date()
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
