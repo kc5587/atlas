@@ -62,6 +62,48 @@ descriptive research results—not forecasts, shortage probabilities, or trading
 signals. Execution friction is shown as evidence in the report but is not
 modeled as a regional numeric component.
 
+### What the numbers mean
+
+**Pressure** is a 0–100 composite indicator: higher values mean more evidence
+of current infrastructure constraint across the available signals. Atlas uses
+demand pressure, supply tightness, and wholesale-price stress, with default
+weights of 35%, 30%, and 20%. The remaining 15% is reserved for execution
+friction. When a component is unavailable, Atlas does not replace it with zero;
+it calculates the score from the available components and reduces confidence.
+
+**Confidence** measures how much usable, region-specific evidence supports the
+score. It is not a statistical significance level or a probability that a
+shortage will occur. **Price days** shows how many distinct daily price
+observations were available in the historical window, making source gaps
+visible rather than hiding them through interpolation.
+
+### What the current result suggests
+
+- **ERCO leads at 62.4**, supported by high supply-tightness and demand-pressure
+  readings. It has no comparable wholesale-price series in this release, so the
+  result is deliberately lower-confidence and should not be compared with
+  price-complete regions without that caveat.
+- **NYIS (61.9) and ISNE (60.2)** combine high supply-tightness with elevated
+  wholesale-price stress. Their ranking is supported by broad coverage, though
+  the score remains a descriptive snapshot rather than a forecast.
+- **PJM (48.3) and MISO (46.9)** show meaningful operational pressure, but MISO
+  has sparse price coverage—166 observed price days—so its confidence is lower.
+- **CISO (42.6) and SWPP (38.4)** have lower composite pressure in this
+  snapshot. That means fewer signals crossed Atlas's pressure thresholds; it
+  does not mean those regions have no infrastructure or interconnection risk.
+
+### How much to trust the ranking
+
+The backtest is intentionally modest. A 30-day rank correlation of 0.19 is a
+weak positive association, while the 90-day value of -0.10 is effectively no
+stable predictive relationship. This supports using Atlas to structure research
+and prioritize diligence—not to make an automated investment or operating
+decision. The sensitivity run reinforces that caution: under 18 reasonable
+lookback and weight scenarios, regional score ranges span 15.4 points for ERCO
+to 32.7 points for PJM. Rankings should therefore be read alongside the
+component evidence, coverage counts, confidence, and Berkeley Lab
+interconnection benchmark below.
+
 ## What Atlas measures
 
 Atlas evaluates seven US balancing-authority regions:
