@@ -37,6 +37,31 @@ treating a new data vintage as a completed live validation release.
 The scope, acceptance criteria, and stopping rule are defined in
 [docs/V1_1_RELEASE_SPEC.md](docs/V1_1_RELEASE_SPEC.md).
 
+## Results snapshot
+
+This is the committed proof-of-results display from the live v1.1 validation
+run. It covers 2022-01-01 through 2025-12-31 and scores each region on the
+latest complete common operating day, 2025-12-31.
+
+| Region | Pressure | Confidence | Price days | Result note |
+| --- | ---: | ---: | ---: | --- |
+| ERCO | 62.4 | 65% | 0 | Explicit ERCO wholesale-price limitation |
+| NYIS | 61.9 | 85% | 1,461 | NYISO LBMP aggregate |
+| ISNE | 60.2 | 85% | 814 | EIA/ICE hub coverage |
+| PJM | 48.3 | 85% | 946 | EIA/ICE hub coverage |
+| MISO | 46.9 | 74% | 166 | Sparse EIA/ICE coverage |
+| CISO | 42.6 | 85% | 916 | EIA/ICE hub coverage |
+| SWPP | 38.4 | 85% | 930 | EIA/ICE hub coverage |
+
+Validation passed with **529,434 observations**, seven regions, zero duplicate
+observation IDs, zero duplicate observation keys, and zero release-gate
+violations. The look-ahead-safe backtest contained 258 30-day observations
+(Spearman rank correlation **0.19**) and 256 90-day observations (**-0.10**).
+Sensitivity analysis covered **18 fixed scenarios per region**. These are
+descriptive research results—not forecasts, shortage probabilities, or trading
+signals. Execution friction is shown as evidence in the report but is not
+modeled as a regional numeric component.
+
 ## What Atlas measures
 
 Atlas evaluates seven US balancing-authority regions:
