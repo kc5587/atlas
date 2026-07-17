@@ -54,3 +54,19 @@ def test_price_stress_requires_history() -> None:
             (observation(date(2026, 6, 1), 25.0, 0),),
             as_of=date(2026, 6, 1),
         )
+
+
+def test_price_stress_uses_latest_observation_on_or_before_as_of() -> None:
+    start = date(2026, 6, 1)
+    history = tuple(
+        observation(start + timedelta(days=index), value, index)
+        for index, value in enumerate((10.0, 20.0, 30.0, 40.0))
+    )
+
+    signal = price_stress(
+        history,
+        as_of=start + timedelta(days=4),
+        config=PriceStressConfig(baseline_days=3, min_baseline_days=3),
+    )
+
+    assert signal.value == pytest.approx(100.0)

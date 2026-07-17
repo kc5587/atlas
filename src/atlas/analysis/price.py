@@ -26,14 +26,16 @@ def price_stress(
     as_of: date,
     config: PriceStressConfig = PriceStressConfig(),
 ) -> ComponentSignal:
-    """Rank the current daily peak price against a trailing history."""
+    """Rank the latest available daily peak on or before ``as_of``."""
 
     daily_peaks = _daily_peaks(observations)
-    current = daily_peaks.get(as_of)
-    if current is None:
-        raise ValueError(f"no price observation for {as_of.isoformat()}")
+    available_days = tuple(day for day in daily_peaks if day <= as_of)
+    if not available_days:
+        raise ValueError(f"no price observation on or before {as_of.isoformat()}")
+    current_day = max(available_days)
+    current = daily_peaks[current_day]
     baseline = tuple(
-        value for day, value in sorted(daily_peaks.items()) if day < as_of
+        value for day, value in sorted(daily_peaks.items()) if day < current_day
     )[-config.baseline_days :]
     if len(baseline) < config.min_baseline_days:
         raise ValueError("not enough price history")
@@ -42,7 +44,7 @@ def price_stress(
     ids = tuple(
         observation.id
         for observation in observations
-        if _observation_day(observation) <= as_of
+        if _observation_day(observation) <= current_day
     )
     return ComponentSignal(
         name="price_stress",

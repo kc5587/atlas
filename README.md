@@ -15,11 +15,16 @@ or investment recommendation.
 
 The fixed v1.1 scope is implemented and the repository checks pass:
 
-- 58 automated tests pass.
+- 59 automated tests pass.
 - Package coverage is 86%, above the CI gate of 80%.
 - The deterministic fixture snapshot and static report build successfully.
-- The working tree is clean and no unfinished-work markers were found in the
+- No unfinished-work markers were found in the
   source, scripts, tests, or release documentation.
+
+The live v1.1 validation bundle has also been run against the fixed
+2022–2025 window: 529,434 observations, seven benchmark regions, and zero
+validation violations. ERCO remains the documented wholesale-price source
+limitation; the other six required price regions have source coverage.
 
 The full live snapshot and validation outputs are intentionally ignored by Git
 because they contain raw source responses and generated artifacts. Therefore,
