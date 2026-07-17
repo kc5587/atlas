@@ -41,3 +41,6 @@ def test_report_renders_history_and_validation_sections() -> None:
     assert "Historical pressure path" in html
     assert "<svg" in html
     assert "Historical validation" in html
+    assert "Not modeled: execution_friction" in html
+    assert "Execution friction is" in html
+    assert "evidence-only" in html

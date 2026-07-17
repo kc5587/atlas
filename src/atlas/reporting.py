@@ -123,7 +123,7 @@ def render_report_html(report: Mapping[str, Any]) -> str:
 <p class="lede">Snapshot: {escape(str(report.get('generated_at', 'unknown')))} ·
 Status: <strong>{escape(str(report.get('dataset_status', 'unknown')))}</strong></p></header>
 <section><h2>Regional overview</h2><table><thead><tr>
-<th>Region</th><th>Pressure</th><th>Confidence</th><th>Missing</th><th>Evidence</th>
+<th>Region</th><th>Pressure</th><th>Confidence</th><th>Data gaps / exclusions</th><th>Evidence</th>
 </tr></thead><tbody>{region_rows}{unavailable_rows}</tbody></table></section>
 <section><h2>Regional detail cards</h2><div class="cards">{region_cards}</div></section>
 <section><h2>Historical pressure path</h2><div class="history">{history_cards or '<p>No score history supplied.</p>'}</div></section>
@@ -140,7 +140,8 @@ Status: <strong>{escape(str(report.get('dataset_status', 'unknown')))}</strong><
 <section><h2>Method and caveats</h2><p>
 Pressure is descriptive, not a shortage probability or trading signal.
 Missing data lowers confidence and is not treated as zero. “Supply tightness” is a
-net-generation headroom proxy, not a formal reserve margin.</p>
+net-generation headroom proxy, not a formal reserve margin. Execution friction is
+evidence-only and is not included in the regional score.</p>
 <p><strong>Evidence key:</strong> <span class="evidence-kind observed">observed</span>
 is directly reported; <span class="evidence-kind estimated">estimated</span> is
 scenario or model-based; <span class="evidence-kind inferred">inferred</span> is
@@ -204,7 +205,7 @@ def _serialize_capex(
 
 
 def _region_row(region: Mapping[str, Any]) -> str:
-    missing = ", ".join(region.get("missing_components", ())) or "none"
+    gaps = _component_gaps(region)
     evidence = "<br>".join(
         f"{escape(str(component['name']))}: {component['value']}"
         for component in region.get("components", ())
@@ -213,7 +214,7 @@ def _region_row(region: Mapping[str, Any]) -> str:
     return (
         f"<tr><td><strong>{escape(str(region['region_id']))}</strong></td>"
         f"<td>{region['pressure']:.1f}</td><td>{region['confidence']:.0%}</td>"
-        f"<td>{escape(missing)}</td><td>{evidence or 'no component evidence'}</td></tr>"
+        f"<td>{escape(gaps)}</td><td>{evidence or 'no component evidence'}</td></tr>"
     )
 
 
@@ -230,14 +231,30 @@ def _region_card(region: Mapping[str, Any]) -> str:
         f" (confidence {component.get('confidence', 0):.0%})</li>"
         for component in region.get("components", ())
     )
-    missing = ", ".join(region.get("missing_components", ())) or "none"
+    gaps = _component_gaps(region)
     return (
         f"<article class='card'><h3>{escape(str(region['region_id']))}</h3>"
         f"<p class='card-score'>{region['pressure']:.1f}<span>/100 pressure</span></p>"
         f"<p>As of {escape(str(region['as_of']))}; overall confidence "
         f"{region['confidence']:.0%}.</p><ul>{components}</ul>"
-        f"<p class='muted'>Missing: {escape(missing)}</p></article>"
+        f"<p class='muted'>Data gaps / exclusions: {escape(gaps)}</p></article>"
     )
+
+
+def _component_gaps(region: Mapping[str, Any]) -> str:
+    missing = tuple(region.get("missing_components", ()))
+    data_gaps = tuple(
+        component for component in missing if component != "execution_friction"
+    )
+    unmodeled = tuple(
+        component for component in missing if component == "execution_friction"
+    )
+    messages = []
+    if data_gaps:
+        messages.append(f"Missing data: {', '.join(data_gaps)}")
+    if unmodeled:
+        messages.append(f"Not modeled: {', '.join(unmodeled)}")
+    return "; ".join(messages) or "none"
 
 
 def _unavailable_card(region: Mapping[str, Any]) -> str:

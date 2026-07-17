@@ -1,7 +1,8 @@
 """Build the fixed v1 report from one curated observation set."""
 
-from datetime import date, datetime
+from collections import defaultdict
 from collections.abc import Mapping
+from datetime import date, datetime
 import json
 from typing import Callable
 from pathlib import Path
@@ -13,6 +14,9 @@ from atlas.evidence import Observation
 from atlas.reporting import build_report_export
 from atlas.snapshot import read_observations
 from atlas.scoring import BottleneckScore, ComponentSignal, score_region
+
+
+EXPECTED_HOURS_PER_DAY = 24
 
 
 def build_report_from_observations(
@@ -63,24 +67,49 @@ def build_report_from_snapshot(
         snapshot_dir / "curated/eia_observations.json"
     )
     capex_observations = read_observations(snapshot_dir / "curated/sec_capex.json")
-    demand_dates = [
-        observation.period_start.date()
-        if isinstance(observation.period_start, datetime)
-        else observation.period_start
-        for observation in eia_observations
-        if observation.metric_id == "demand"
-    ]
-    if not demand_dates:
-        raise ValueError("snapshot contains no demand observations")
+    as_of = _latest_complete_common_day(eia_observations, region_ids)
     return build_report_from_observations(
         observations=eia_observations,
         capex_observations=capex_observations,
         region_ids=region_ids,
         company_labels=company_labels,
-        as_of=max(demand_dates),
+        as_of=as_of,
         generated_at=datetime.fromisoformat(manifest["generated_at"]),
         analysis=analysis,
     )
+
+
+def _latest_complete_common_day(
+    observations: tuple[Observation, ...], region_ids: tuple[str, ...]
+) -> date:
+    """Return the latest UTC day with complete demand and generation coverage."""
+
+    periods: defaultdict[tuple[str, date, str], set[object]] = defaultdict(set)
+    required_metrics = ("demand", "net_generation")
+    for observation in observations:
+        if observation.entity_id not in region_ids:
+            continue
+        if observation.metric_id not in required_metrics:
+            continue
+        day = _observation_day(observation)
+        periods[(observation.entity_id, day, observation.metric_id)].add(
+            observation.period_start
+        )
+
+    candidate_days = sorted({key[1] for key in periods}, reverse=True)
+    for day in candidate_days:
+        if all(
+            len(periods[(region_id, day, metric_id)]) >= EXPECTED_HOURS_PER_DAY
+            for region_id in region_ids
+            for metric_id in required_metrics
+        ):
+            return day
+    raise ValueError("snapshot contains no complete common operating day")
+
+
+def _observation_day(observation: Observation) -> date:
+    period = observation.period_start
+    return period.date() if isinstance(period, datetime) else period
 
 
 def _score_region(
