@@ -1,5 +1,6 @@
 """Research-facing analysis helpers."""
 
+from .demand import DemandPressureConfig, demand_pressure
 from .insights import (
     InsightCard,
     RegionalSnapshot,
@@ -7,10 +8,9 @@ from .insights import (
     load_signal_fixture,
     rank_regions,
 )
-from .demand import DemandPressureConfig, demand_pressure
-from .supply import SupplyTightnessConfig, supply_tightness
-from .price import PriceStressConfig, price_stress
 from .pipeline import score_from_observations
+from .price import PriceStressConfig, price_stress
+from .supply import SupplyTightnessConfig, supply_tightness
 
 __all__ = [
     "InsightCard",

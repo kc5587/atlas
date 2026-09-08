@@ -1,13 +1,13 @@
 from datetime import date
-from urllib.parse import parse_qs, urlparse
 from urllib.error import URLError
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
 from atlas.ingest.eia import (
+    EIAClient,
     EIAFetchError,
     EIAHourlyQuery,
-    EIAClient,
     build_hourly_query_url,
 )
 
@@ -71,7 +71,9 @@ def test_client_wraps_transport_errors() -> None:
 
     with pytest.raises(EIAFetchError, match="could not fetch EIA data"):
         client.fetch_hourly_demand(
-            EIAHourlyQuery(regions=("ERCO",), start=date(2026, 7, 2), end=date(2026, 7, 2))
+            EIAHourlyQuery(
+                regions=("ERCO",), start=date(2026, 7, 2), end=date(2026, 7, 2)
+            )
         )
 
 

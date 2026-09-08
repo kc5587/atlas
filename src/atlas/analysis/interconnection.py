@@ -53,7 +53,9 @@ def aggregate_queue_projects(
                 "region_id": region_id,
                 "sample_size": len(values),
                 "active_project_count": len(active),
-                "active_capacity_mw": round(sum(item.capacity_mw for item in active), 4),
+                "active_capacity_mw": round(
+                    sum(item.capacity_mw for item in active), 4
+                ),
                 "withdrawal_rate": round(withdrawn / denominator, 4)
                 if denominator
                 else None,
@@ -74,7 +76,9 @@ def queue_project_as_dict(project: QueueProject) -> dict[str, object]:
         "status": project.status,
         "request_date": project.request_date.isoformat(),
         "operation_date": (
-            None if project.operation_date is None else project.operation_date.isoformat()
+            None
+            if project.operation_date is None
+            else project.operation_date.isoformat()
         ),
         "capacity_mw": project.capacity_mw,
     }

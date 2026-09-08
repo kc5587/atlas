@@ -4,7 +4,6 @@ import pytest
 
 from atlas.scoring import ComponentSignal, score_region
 
-
 AS_OF = date(2026, 7, 2)
 
 

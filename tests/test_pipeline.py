@@ -2,12 +2,11 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from atlas.analysis.pipeline import score_from_observations
 from atlas.analysis.demand import DemandPressureConfig
+from atlas.analysis.pipeline import score_from_observations
 from atlas.analysis.price import PriceStressConfig
 from atlas.analysis.supply import SupplyTightnessConfig
 from atlas.evidence import EvidenceKind, Observation, SourceRef
-
 
 SOURCE = SourceRef(
     id="fixture:eia",
@@ -45,9 +44,7 @@ def test_pipeline_composes_raw_signals_and_preserves_missing_execution_data() ->
     )
     prices = tuple(
         observation("wholesale_price", start + timedelta(days=index), value, index)
-        for index, value in enumerate(
-            (10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0)
-        )
+        for index, value in enumerate((10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0))
     )
 
     score = score_from_observations(

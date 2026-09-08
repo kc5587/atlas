@@ -12,7 +12,6 @@ from typing import Any
 
 from atlas.evidence import EvidenceKind, Observation, SourceRef, Temporal
 
-
 SNAPSHOT_SCHEMA_VERSION = 1
 
 
@@ -50,7 +49,9 @@ def write_observations(path: Path, observations: tuple[Observation, ...]) -> Non
 
     payload = {
         "schema_version": SNAPSHOT_SCHEMA_VERSION,
-        "observations": [_serialize_observation(observation) for observation in observations],
+        "observations": [
+            _serialize_observation(observation) for observation in observations
+        ],
     }
     _atomic_write_json(path, payload)
 

@@ -5,8 +5,12 @@ from urllib.error import URLError
 import pytest
 
 from atlas.evidence import EvidenceKind, SourceRef
-from atlas.ingest.sec import SECDataError, SECClient, SECFetchError, parse_capex_observations
-
+from atlas.ingest.sec import (
+    SECClient,
+    SECDataError,
+    SECFetchError,
+    parse_capex_observations,
+)
 
 FIXTURE = Path("data/fixtures/sec_companyfacts.json")
 SOURCE = SourceRef(

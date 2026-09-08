@@ -1,17 +1,43 @@
 [project]
 name = "atlas"
-version = "0.1.0"
-description = "Reproducible AI value-chain research"
+version = "1.1.0"
+description = "Provenance-first research pipeline for AI infrastructure bottlenecks"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/kc5587/atlas"
+Issues = "https://github.com/kc5587/atlas/issues"
+
 [dependency-groups]
-dev = ["pytest>=8.0", "pandas>=2.0", "openpyxl>=3.1"]
+dev = [
+    "openpyxl>=3.1",
+    "pandas>=2.0",
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "ruff>=0.12",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 addopts = "-q"
+
+[tool.coverage.run]
+source = ["atlas"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
 
 [build-system]
 requires = ["hatchling"]

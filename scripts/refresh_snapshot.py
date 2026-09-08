@@ -7,7 +7,12 @@ from pathlib import Path
 
 from atlas.ingest.eia import EIAClient
 from atlas.ingest.sec import SECClient
-from atlas.refresh import DEFAULT_COMPANIES, DEFAULT_REGIONS, RefreshConfig, refresh_snapshot
+from atlas.refresh import (
+    DEFAULT_COMPANIES,
+    DEFAULT_REGIONS,
+    RefreshConfig,
+    refresh_snapshot,
+)
 
 
 def main() -> None:

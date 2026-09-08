@@ -1,13 +1,12 @@
 """Versioned analytical export and static HTML report generation."""
 
+from collections.abc import Mapping
 from datetime import date, datetime
 from html import escape
-from collections.abc import Mapping
 from typing import Any
 
 from atlas.evidence import Observation
 from atlas.scoring import BottleneckScore
-
 
 EXECUTION_EVIDENCE = (
     {
@@ -77,6 +76,8 @@ def build_report_export(
 def render_report_html(report: Mapping[str, Any]) -> str:
     """Render a dependency-free, source-aware static report."""
 
+    dataset_status = str(report.get("dataset_status", "unknown"))
+    dataset_status_label = dataset_status.replace("_", " ").title()
     region_rows = "".join(_region_row(region) for region in report.get("regions", ()))
     region_cards = _region_cards(report)
     execution_rows = "".join(
@@ -95,12 +96,9 @@ def render_report_html(report: Mapping[str, Any]) -> str:
     company_rows = "".join(
         _company_row(company) for company in report.get("companies", ())
     )
-    history_cards = "".join(
-        _history_card(item) for item in report.get("history", ())
-    )
+    history_cards = "".join(_history_card(item) for item in report.get("history", ()))
     backtest_rows = "".join(
-        _backtest_row(item)
-        for item in report.get("backtest", {}).get("summaries", ())
+        _backtest_row(item) for item in report.get("backtest", {}).get("summaries", ())
     )
     sensitivity_rows = "".join(
         _sensitivity_row(item)
@@ -120,15 +118,15 @@ def render_report_html(report: Mapping[str, Any]) -> str:
 <style>{_css()}</style></head><body>
 <main><header><p class="eyebrow">ATLAS V1.1 · AI INFRASTRUCTURE BOTTLENECK MONITOR</p>
 <h1>Where is AI infrastructure under pressure?</h1>
-<p class="lede">Snapshot: {escape(str(report.get('generated_at', 'unknown')))} ·
-Status: <strong>{escape(str(report.get('dataset_status', 'unknown')))}</strong></p></header>
+<p class="lede">Snapshot: {escape(str(report.get("generated_at", "unknown")))} ·
+Status: <strong>{escape(dataset_status_label)}</strong></p></header>
 <section><h2>Regional overview</h2><table><thead><tr>
 <th>Region</th><th>Pressure</th><th>Confidence</th><th>Data gaps / exclusions</th><th>Evidence</th>
 </tr></thead><tbody>{region_rows}{unavailable_rows}</tbody></table></section>
 <section><h2>Regional detail cards</h2><div class="cards">{region_cards}</div></section>
-<section><h2>Historical pressure path</h2><div class="history">{history_cards or '<p>No score history supplied.</p>'}</div></section>
+<section><h2>Historical pressure path</h2><div class="history">{history_cards or "<p>No score history supplied.</p>"}</div></section>
 <section><h2>Historical validation</h2><p class="status">{escape(validation_status)}</p>
-<p>{escape(str(validation.get('observation_count', 'unknown')))} observations; the coverage table makes source gaps visible.</p><table><thead><tr><th>Region</th><th>Demand days</th><th>Generation days</th><th>Price days</th><th>Range</th></tr></thead><tbody>{coverage_rows or '<tr><td colspan="5">No coverage details supplied.</td></tr>'}</tbody></table></section>
+<p>{escape(str(validation.get("observation_count", "unknown")))} observations; the coverage table makes source gaps visible.</p><table><thead><tr><th>Region</th><th>Demand days</th><th>Generation days</th><th>Price days</th><th>Range</th></tr></thead><tbody>{coverage_rows or '<tr><td colspan="5">No coverage details supplied.</td></tr>'}</tbody></table></section>
 <section><h2>Backtest summary</h2><table><thead><tr><th>Horizon</th><th>Observations</th><th>Rank correlation</th><th>Mean future delta</th></tr></thead><tbody>{backtest_rows or '<tr><td colspan="4">No backtest supplied.</td></tr>'}</tbody></table></section>
 <section><h2>Sensitivity range</h2><table><thead><tr><th>Region</th><th>Scenarios</th><th>Min</th><th>Max</th><th>Range</th></tr></thead><tbody>{sensitivity_rows or '<tr><td colspan="5">No sensitivity analysis supplied.</td></tr>'}</tbody></table></section>
 <section><h2>Company capital commitment</h2><table><thead><tr>
@@ -195,7 +193,9 @@ def _serialize_capex(
                 "latest_period_end": latest.period_end.isoformat(),
                 "latest_vintage": latest.vintage,
                 "prior_value": None if prior is None else prior.value,
-                "prior_period_end": None if prior is None else prior.period_end.isoformat(),
+                "prior_period_end": None
+                if prior is None
+                else prior.period_end.isoformat(),
                 "change_vs_prior_pct": None if change is None else round(change, 4),
                 "observation_ids": [latest.id] + ([] if prior is None else [prior.id]),
                 "evidence_kind": latest.kind.value,
@@ -220,7 +220,9 @@ def _region_row(region: Mapping[str, Any]) -> str:
 
 def _region_cards(report: Mapping[str, Any]) -> str:
     cards = [_region_card(region) for region in report.get("regions", ())]
-    cards.extend(_unavailable_card(region) for region in report.get("unavailable_regions", ()))
+    cards.extend(
+        _unavailable_card(region) for region in report.get("unavailable_regions", ())
+    )
     return "".join(cards)
 
 

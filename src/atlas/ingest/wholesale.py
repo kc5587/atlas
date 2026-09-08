@@ -88,9 +88,7 @@ def _parse_row(
     except ValueError as error:
         raise WholesaleDataError("invalid wholesale date or price") from error
     return Observation(
-        id=(
-            f"eia:wholesale:{region}:{_slug(hub)}:{period.isoformat()}"
-        ),
+        id=(f"eia:wholesale:{region}:{_slug(hub)}:{period.isoformat()}"),
         metric_id="wholesale_price",
         entity_id=region,
         period_start=period,

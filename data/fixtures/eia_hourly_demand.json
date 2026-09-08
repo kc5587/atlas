@@ -1,0 +1,34 @@
+{
+  "response": {
+    "data": [
+      {
+        "period": "2026-07-02T00:00:00Z",
+        "respondent": "ERCO",
+        "type-name": "Demand",
+        "value": "82500",
+        "value-units": "MW"
+      },
+      {
+        "period": "2026-07-02T01:00:00Z",
+        "respondent": "ERCO",
+        "type-name": "Demand",
+        "value": "83000",
+        "value-units": "MW"
+      },
+      {
+        "period": "2026-07-02T00:00:00Z",
+        "respondent": "ERCO",
+        "type-name": "Net generation",
+        "value": "79000",
+        "value-units": "MW"
+      },
+      {
+        "period": "2026-07-02T00:00:00Z",
+        "respondent": "ERCO",
+        "type-name": "Total interchange",
+        "value": "-3500",
+        "value-units": "MW"
+      }
+    ]
+  }
+}

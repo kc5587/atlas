@@ -6,7 +6,6 @@ from enum import StrEnum
 from math import isfinite
 from urllib.parse import urlparse
 
-
 Temporal = date | datetime
 
 

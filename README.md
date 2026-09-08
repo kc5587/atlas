@@ -1,5 +1,9 @@
 # Atlas: AI Infrastructure Bottleneck Monitor
 
+[![CI](https://github.com/kc5587/atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/kc5587/atlas/actions/workflows/ci.yml)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
+
 Atlas is a provenance-first research pipeline for examining where the physical
 and financial constraints of AI infrastructure may be tightening. It combines
 electricity-system observations, wholesale-market data, public-company filings,
@@ -9,14 +13,23 @@ Atlas is descriptive and exploratory. Its pressure score is not a shortage
 probability, outage forecast, price forecast, trading signal, causal estimate,
 or investment recommendation.
 
+## See it
+
+![Illustrative Atlas report preview](examples/report-preview.svg)
+
+The committed [HTML report](examples/report.html) and
+[JSON export](examples/report.json) are generated from sanitised, synthetic
+fixtures. They demonstrate the complete offline workflow without presenting
+the example values as live research.
+
 ## Release status
 
-**v1.1 implementation complete — last repository verification: 2026-07-17.**
+**v1.1 implementation complete — last repository verification: 2026-09-08.**
 
 The fixed v1.1 scope is implemented and the repository checks pass:
 
-- 61 automated tests pass.
-- Package coverage is 86%, above the CI gate of 80%.
+- 63 automated tests pass.
+- Package coverage is at least 86%, above the CI gate of 80%.
 - The deterministic fixture snapshot and static report build successfully.
 - No unfinished-work markers were found in the
   source, scripts, tests, or release documentation.
@@ -232,6 +245,9 @@ directory:
 - report.html — dependency-free static report with regional cards, component
   history, validation tables, source links, and limitations.
 
+The fixture report command also writes `report-preview.svg`, a compact,
+clearly labelled documentation preview.
+
 ## Quickstart
 
 The project requires Python 3.12 or newer and uses uv for environment setup.
@@ -242,7 +258,7 @@ make test
 make fixture-report
 ~~~
 
-make fixture-report is the offline reproducibility check. It builds a small
+`make fixture-report` is the offline reproducibility check. It builds a small
 deterministic snapshot from data/fixtures/ and renders a temporary HTML report
 without network access.
 
@@ -333,3 +349,7 @@ Atlas intentionally does not:
 For the full research thesis, evidence standard, source plan, and non-goals,
 see [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md). For the finite delivery
 history, see [docs/REBUILD_PLAN.md](docs/REBUILD_PLAN.md).
+
+## License
+
+Released under the [MIT License](LICENSE).

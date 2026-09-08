@@ -8,11 +8,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-
 REPORT_TYPE_ID = 13060
-DOCUMENT_LIST_URL = (
-    "https://www.ercot.com/misapp/servlets/IceDocListJsonWS"
-)
+DOCUMENT_LIST_URL = "https://www.ercot.com/misapp/servlets/IceDocListJsonWS"
 DOWNLOAD_URL = "https://www.ercot.com/misdownload/servlets/mirDownload"
 USER_AGENT = "Atlas/0.1 public-data-fetch"
 

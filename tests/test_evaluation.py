@@ -5,7 +5,6 @@ from atlas.analysis.evaluation import EvaluationConfig, run_backtest, run_sensit
 from atlas.analysis.price import PriceStressConfig
 from atlas.evidence import EvidenceKind, Observation, SourceRef
 
-
 SOURCE = SourceRef(
     id="fixture:evaluation",
     url="https://example.com/evaluation",
@@ -21,9 +20,25 @@ def observations(days: int = 140) -> tuple[Observation, ...]:
         for region, multiplier in (("ERCO", 1.0), ("PJM", 1.1)):
             rows.extend(
                 (
-                    _observation("demand", region, day, 100 * multiplier + index * multiplier, index, "MW"),
-                    _observation("net_generation", region, day, 120 * multiplier, index, "MW"),
-                    _observation("wholesale_price", region, day, 20 + index * 0.1, index, "USD_per_MWh"),
+                    _observation(
+                        "demand",
+                        region,
+                        day,
+                        100 * multiplier + index * multiplier,
+                        index,
+                        "MW",
+                    ),
+                    _observation(
+                        "net_generation", region, day, 120 * multiplier, index, "MW"
+                    ),
+                    _observation(
+                        "wholesale_price",
+                        region,
+                        day,
+                        20 + index * 0.1,
+                        index,
+                        "USD_per_MWh",
+                    ),
                 )
             )
     return tuple(rows)

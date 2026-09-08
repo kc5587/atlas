@@ -10,7 +10,6 @@ from atlas.report_pipeline import (
 )
 from atlas.snapshot import write_observations
 
-
 SOURCE = SourceRef(
     id="fixture:test",
     url="https://example.com/source",
@@ -26,9 +25,7 @@ def observation(
     entity_id: str = "ERCO",
     hour: int = 0,
 ) -> Observation:
-    timestamp = datetime(
-        day.year, day.month, day.day, hour, tzinfo=timezone.utc
-    )
+    timestamp = datetime(day.year, day.month, day.day, hour, tzinfo=timezone.utc)
     return Observation(
         id=f"{metric_id}-{index}",
         metric_id=metric_id,
@@ -92,9 +89,7 @@ def test_snapshot_report_uses_latest_complete_common_day(tmp_path: Path) -> None
     observations.extend(
         (
             observation("demand", partial_day, 80.0, len(observations)),
-            observation(
-                "net_generation", partial_day, 100.0, len(observations) + 1
-            ),
+            observation("net_generation", partial_day, 100.0, len(observations) + 1),
         )
     )
     snapshot = tmp_path / "snapshot"

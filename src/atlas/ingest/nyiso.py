@@ -22,8 +22,19 @@ NYISO_SOURCE = SourceRef(
 )
 
 NYISO_ZONES = frozenset(
-    {"CAPITL", "CENTRL", "DUNWOD", "GENESE", "HUD VL", "LONGIL", "MHK VL",
-     "MILLWD", "N.Y.C.", "NORTH", "WEST"}
+    {
+        "CAPITL",
+        "CENTRL",
+        "DUNWOD",
+        "GENESE",
+        "HUD VL",
+        "LONGIL",
+        "MHK VL",
+        "MILLWD",
+        "N.Y.C.",
+        "NORTH",
+        "WEST",
+    }
 )
 
 
@@ -37,7 +48,9 @@ def parse_nyiso_lbmp_zip(
     grouped: defaultdict[datetime, list[float]] = defaultdict(list)
     try:
         with zipfile.ZipFile(path) as archive:
-            names = tuple(name for name in archive.namelist() if name.endswith("_zone.csv"))
+            names = tuple(
+                name for name in archive.namelist() if name.endswith("_zone.csv")
+            )
             for name in names:
                 with archive.open(name) as raw_handle:
                     text = io.TextIOWrapper(raw_handle, encoding="utf-8-sig")

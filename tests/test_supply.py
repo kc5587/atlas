@@ -5,7 +5,6 @@ import pytest
 from atlas.analysis.supply import SupplyTightnessConfig, supply_tightness
 from atlas.evidence import EvidenceKind, Observation, SourceRef
 
-
 SOURCE = SourceRef(
     id="fixture:eia",
     url="https://www.eia.gov/electricity/gridmonitor/about",

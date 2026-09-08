@@ -4,7 +4,6 @@ from atlas.evidence import EvidenceKind, Observation, SourceRef
 from atlas.reporting import build_report_export, render_report_html
 from atlas.scoring import ComponentSignal, score_region
 
-
 SOURCE = SourceRef(
     id="fixture:test",
     url="https://example.com/source",

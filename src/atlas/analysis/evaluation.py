@@ -22,9 +22,7 @@ class EvaluationConfig:
     """Fixed, transparent parameters for historical evaluation."""
 
     demand_config: DemandPressureConfig = field(default_factory=DemandPressureConfig)
-    supply_config: SupplyTightnessConfig = field(
-        default_factory=SupplyTightnessConfig
-    )
+    supply_config: SupplyTightnessConfig = field(default_factory=SupplyTightnessConfig)
     price_config: PriceStressConfig = field(default_factory=PriceStressConfig)
     minimum_history_days: int = 365
     weights: Mapping[str, float] = field(
@@ -169,7 +167,9 @@ def run_sensitivity(
                         "price_baseline_days": price_days,
                         "weight_set": weight_name,
                         "scores": {
-                            region_id: None if score is None else round(score.pressure, 4)
+                            region_id: None
+                            if score is None
+                            else round(score.pressure, 4)
                             for region_id, score in scores.items()
                         },
                     }
@@ -198,9 +198,17 @@ def _score_at(
     generation = tuple(item for item in regional if item.metric_id == "net_generation")
     prices = tuple(item for item in regional if item.metric_id == "wholesale_price")
     signals = (
-        _try_signal(lambda: demand_pressure(demand, as_of, config.demand_config), "demand_pressure"),
-        _try_signal(lambda: supply_tightness(demand, generation, as_of, config.supply_config), "supply_tightness"),
-        _try_signal(lambda: price_stress(prices, as_of, config.price_config), "price_stress"),
+        _try_signal(
+            lambda: demand_pressure(demand, as_of, config.demand_config),
+            "demand_pressure",
+        ),
+        _try_signal(
+            lambda: supply_tightness(demand, generation, as_of, config.supply_config),
+            "supply_tightness",
+        ),
+        _try_signal(
+            lambda: price_stress(prices, as_of, config.price_config), "price_stress"
+        ),
         ComponentSignal("execution_friction", None, 0.0, ()),
     )
     if not any(signal.value is not None for signal in signals):
@@ -208,9 +216,7 @@ def _score_at(
     return score_region(region_id, as_of, signals, config.weights)
 
 
-def _try_signal(
-    factory: Callable[[], ComponentSignal], name: str
-) -> ComponentSignal:
+def _try_signal(factory: Callable[[], ComponentSignal], name: str) -> ComponentSignal:
     try:
         return factory()
     except ValueError:
@@ -258,8 +264,12 @@ def _sensitivity_summary(
                 "scenario_count": len(values),
                 "min_pressure": round(min(values), 4) if values else None,
                 "max_pressure": round(max(values), 4) if values else None,
-                "mean_pressure": round(sum(values) / len(values), 4) if values else None,
-                "pressure_range": round(max(values) - min(values), 4) if values else None,
+                "mean_pressure": round(sum(values) / len(values), 4)
+                if values
+                else None,
+                "pressure_range": round(max(values) - min(values), 4)
+                if values
+                else None,
             }
         )
     return output
@@ -310,7 +320,11 @@ def _pearson(left: list[float], right: list[float]) -> float:
     numerator = sum((x - left_mean) * (y - right_mean) for x, y in zip(left, right))
     left_scale = sqrt(sum((x - left_mean) ** 2 for x in left))
     right_scale = sqrt(sum((y - right_mean) ** 2 for y in right))
-    return 0.0 if left_scale == 0 or right_scale == 0 else numerator / left_scale / right_scale
+    return (
+        0.0
+        if left_scale == 0 or right_scale == 0
+        else numerator / left_scale / right_scale
+    )
 
 
 def _day(observation: Observation) -> date:
@@ -319,4 +333,6 @@ def _day(observation: Observation) -> date:
 
 
 def _next_month(value: date) -> date:
-    return date(value.year + (value.month == 12), 1 if value.month == 12 else value.month + 1, 1)
+    return date(
+        value.year + (value.month == 12), 1 if value.month == 12 else value.month + 1, 1
+    )

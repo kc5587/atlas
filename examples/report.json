@@ -1,0 +1,105 @@
+{
+  "dataset_status": "illustrative_fixture",
+  "generated_at": "2026-07-02",
+  "regions": [
+    {
+      "as_of": "2026-07-02",
+      "components": [
+        {
+          "confidence": 0.95,
+          "contribution": 28.0,
+          "name": "demand_pressure",
+          "observation_ids": [
+            "fixture:ercot:demand"
+          ],
+          "value": 80,
+          "weight": 0.35
+        },
+        {
+          "confidence": 0.9,
+          "contribution": 21.0,
+          "name": "supply_tightness",
+          "observation_ids": [
+            "fixture:ercot:supply"
+          ],
+          "value": 70,
+          "weight": 0.3
+        },
+        {
+          "confidence": 0.9,
+          "contribution": 15.0,
+          "name": "price_stress",
+          "observation_ids": [
+            "fixture:ercot:price"
+          ],
+          "value": 75,
+          "weight": 0.2
+        },
+        {
+          "confidence": 0.75,
+          "contribution": 9.9,
+          "name": "execution_friction",
+          "observation_ids": [
+            "fixture:ercot:execution"
+          ],
+          "value": 66,
+          "weight": 0.15
+        }
+      ],
+      "confidence": 0.895,
+      "missing_components": [],
+      "pressure": 73.9,
+      "region_id": "ercot"
+    },
+    {
+      "as_of": "2026-07-02",
+      "components": [
+        {
+          "confidence": 0.8,
+          "contribution": 19.25,
+          "name": "demand_pressure",
+          "observation_ids": [
+            "fixture:miso:demand"
+          ],
+          "value": 55,
+          "weight": 0.35
+        },
+        {
+          "confidence": 0.75,
+          "contribution": 15.0,
+          "name": "supply_tightness",
+          "observation_ids": [
+            "fixture:miso:supply"
+          ],
+          "value": 50,
+          "weight": 0.3
+        },
+        {
+          "confidence": 0.7,
+          "contribution": 8.0,
+          "name": "price_stress",
+          "observation_ids": [
+            "fixture:miso:price"
+          ],
+          "value": 40,
+          "weight": 0.2
+        },
+        {
+          "confidence": 0.0,
+          "contribution": 0.0,
+          "name": "execution_friction",
+          "observation_ids": [],
+          "value": null,
+          "weight": 0.15
+        }
+      ],
+      "confidence": 0.645,
+      "missing_components": [
+        "execution_friction"
+      ],
+      "pressure": 49.7059,
+      "region_id": "miso"
+    }
+  ],
+  "schema_version": 1
+}

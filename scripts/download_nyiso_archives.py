@@ -1,12 +1,10 @@
 """Download monthly NYISO day-ahead zonal LBMP archives."""
 
 import argparse
-from calendar import monthrange
 from datetime import date
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-
 
 BASE_URL = "https://mis.nyiso.com/public/csv/damlbmp/{stamp}damlbmp_zone_csv.zip"
 

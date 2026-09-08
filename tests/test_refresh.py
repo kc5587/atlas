@@ -1,13 +1,12 @@
 import json
-from dataclasses import replace
 import zipfile
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from atlas.refresh import RefreshConfig, refresh_snapshot
-
 
 EIA_FIXTURE = Path("data/fixtures/eia_hourly_demand.json")
 SEC_FIXTURE = Path("data/fixtures/sec_companyfacts.json")

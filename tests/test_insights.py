@@ -8,7 +8,6 @@ from atlas.analysis.insights import (
     rank_regions,
 )
 
-
 FIXTURE = Path("data/fixtures/regional_signals.json")
 
 

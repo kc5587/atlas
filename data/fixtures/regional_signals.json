@@ -1,0 +1,51 @@
+{
+  "regions": [
+    {
+      "region_id": "ercot",
+      "as_of": "2026-07-02",
+      "signals": {
+        "demand_pressure": {
+          "value": 80,
+          "confidence": 0.95,
+          "observation_ids": ["fixture:ercot:demand"]
+        },
+        "supply_tightness": {
+          "value": 70,
+          "confidence": 0.9,
+          "observation_ids": ["fixture:ercot:supply"]
+        },
+        "price_stress": {
+          "value": 75,
+          "confidence": 0.9,
+          "observation_ids": ["fixture:ercot:price"]
+        },
+        "execution_friction": {
+          "value": 66,
+          "confidence": 0.75,
+          "observation_ids": ["fixture:ercot:execution"]
+        }
+      }
+    },
+    {
+      "region_id": "miso",
+      "as_of": "2026-07-02",
+      "signals": {
+        "demand_pressure": {
+          "value": 55,
+          "confidence": 0.8,
+          "observation_ids": ["fixture:miso:demand"]
+        },
+        "supply_tightness": {
+          "value": 50,
+          "confidence": 0.75,
+          "observation_ids": ["fixture:miso:supply"]
+        },
+        "price_stress": {
+          "value": 40,
+          "confidence": 0.7,
+          "observation_ids": ["fixture:miso:price"]
+        }
+      }
+    }
+  ]
+}

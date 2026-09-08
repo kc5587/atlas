@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 
-
 VALID_STAGES = frozenset(
     {"compute", "semiconductor", "network", "power", "software", "applications"}
 )

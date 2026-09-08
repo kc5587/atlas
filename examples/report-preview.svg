@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="310" viewBox="0 0 1100 310">
+<style>
+  .bg { fill: #0b1020; } .title { fill: #f8fafc; font: 700 34px Arial, sans-serif; }
+  .sub { fill: #94a3b8; font: 18px Arial, sans-serif; }
+  .region, .score { fill: #e2e8f0; font: 700 22px Arial, sans-serif; }
+  .track { fill: #1e293b; } .bar { fill: #38bdf8; }
+</style>
+<rect width="1100" height="310" rx="18" class="bg"/>
+<text x="70" y="62" class="title">Atlas regional pressure preview</text>
+<text x="70" y="98" class="sub">Illustrative fixture data · deterministic offline example · not a forecast</text>
+<text x="70" y="170" class="region">ERCOT</text><rect x="210" y="142" width="720" height="34" rx="8" class="track"/><rect x="210" y="142" width="532.1" height="34" rx="8" class="bar"/><text x="960" y="170" class="score">73.9</text><text x="70" y="260" class="region">MISO</text><rect x="210" y="232" width="720" height="34" rx="8" class="track"/><rect x="210" y="232" width="357.9" height="34" rx="8" class="bar"/><text x="960" y="260" class="score">49.7</text>
+</svg>

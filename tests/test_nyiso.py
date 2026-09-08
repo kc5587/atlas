@@ -1,11 +1,9 @@
-import io
 import zipfile
 from datetime import date
 from pathlib import Path
 
 from atlas.evidence import EvidenceKind, SourceRef
 from atlas.ingest.nyiso import parse_nyiso_lbmp_zip
-
 
 SOURCE = SourceRef(
     id="nyiso:dam-lbmp",

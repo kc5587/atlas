@@ -9,7 +9,6 @@ import pandas as pd
 
 from atlas.analysis.interconnection import QueueProject, aggregate_queue_projects
 
-
 REGION_MAP = {
     "ERCOT": "ERCO",
     "PJM": "PJM",
@@ -59,9 +58,13 @@ def _project(row: pd.Series) -> QueueProject:
         if pd.notna(raw_operation) and float(raw_operation) > 1000
         else None
     )
-    capacity = abs(sum(
-        float(row[column]) for column in ("mw1", "mw2", "mw3") if pd.notna(row.get(column))
-    ))
+    capacity = abs(
+        sum(
+            float(row[column])
+            for column in ("mw1", "mw2", "mw3")
+            if pd.notna(row.get(column))
+        )
+    )
     return QueueProject(
         region_id=region,
         status=str(row["q_status"]).strip().lower(),

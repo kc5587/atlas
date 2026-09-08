@@ -36,9 +36,7 @@ def demand_pressure(
     if current is None:
         raise ValueError(f"no demand observation for {as_of.isoformat()}")
     baseline_values = tuple(
-        value
-        for day, value in sorted(daily_peaks.items())
-        if day < as_of
+        value for day, value in sorted(daily_peaks.items()) if day < as_of
     )[-config.baseline_days :]
     if len(baseline_values) < config.min_baseline_days:
         raise ValueError("not enough demand history for baseline")
@@ -47,7 +45,9 @@ def demand_pressure(
     pressure = _clamp(growth_pct / config.full_pressure_growth_pct * 100.0)
     confidence = min(1.0, len(baseline_values) / config.baseline_days)
     relevant_ids = tuple(
-        observation.id for observation in observations if _observation_day(observation) <= as_of
+        observation.id
+        for observation in observations
+        if _observation_day(observation) <= as_of
     )
     return ComponentSignal(
         name="demand_pressure",

@@ -10,14 +10,14 @@ from typing import Protocol
 
 from atlas.evidence import SourceRef
 from atlas.ingest.eia import (
-    EIAHourlyQuery,
     EIA_SOURCE,
+    EIAHourlyQuery,
     parse_hourly_demand,
     parse_hourly_generation,
 )
-from atlas.ingest.sec import SECDataError, SEC_SOURCE, parse_capex_observations
 from atlas.ingest.eia930 import EIA930_SOURCE, parse_eia930_files
 from atlas.ingest.nyiso import NYISO_SOURCE, parse_nyiso_lbmp_zip
+from atlas.ingest.sec import SEC_SOURCE, SECDataError, parse_capex_observations
 from atlas.ingest.wholesale import WHOLESALE_SOURCE, parse_wholesale_csv
 from atlas.snapshot import (
     SnapshotManifest,
@@ -26,7 +26,6 @@ from atlas.snapshot import (
     write_manifest,
     write_observations,
 )
-
 
 DEFAULT_REGIONS = ("ERCO", "PJM", "MISO", "CISO", "SWPP", "NYIS", "ISNE")
 DEFAULT_COMPANIES = {

@@ -52,6 +52,10 @@ def test_rejects_cycles() -> None:
 
     with pytest.raises(GraphValidationError, match="graph contains a cycle"):
         ValueChainGraph.build(
-            nodes=(node("chip"), node("model", "software"), node("app", "applications")),
+            nodes=(
+                node("chip"),
+                node("model", "software"),
+                node("app", "applications"),
+            ),
             edges=edges,
         )

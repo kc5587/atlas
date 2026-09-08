@@ -50,7 +50,9 @@ def load_signal_fixture(path: Path | str) -> tuple[RegionalSnapshot, ...]:
     return tuple(_parse_region(item) for item in regions)
 
 
-def rank_regions(snapshots: tuple[RegionalSnapshot, ...]) -> tuple[BottleneckScore, ...]:
+def rank_regions(
+    snapshots: tuple[RegionalSnapshot, ...],
+) -> tuple[BottleneckScore, ...]:
     """Rank regions by pressure, breaking ties deterministically by ID."""
 
     scores = tuple(snapshot.score for snapshot in snapshots)

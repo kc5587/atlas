@@ -27,13 +27,15 @@ def test_report_renders_history_and_validation_sections() -> None:
         generated_at=date(2026, 7, 3),
         dataset_status="complete",
     )
-    report["history"] = [{
-        "region_id": "ERCO",
-        "points": [
-            {"as_of": "2022-01-01", "pressure": 20.0, "confidence": 0.5},
-            {"as_of": "2022-02-01", "pressure": 30.0, "confidence": 0.6},
-        ],
-    }]
+    report["history"] = [
+        {
+            "region_id": "ERCO",
+            "points": [
+                {"as_of": "2022-01-01", "pressure": 20.0, "confidence": 0.5},
+                {"as_of": "2022-02-01", "pressure": 30.0, "confidence": 0.6},
+            ],
+        }
+    ]
     report["validation"] = {"passed": True, "observation_count": 10}
 
     html = render_report_html(report)

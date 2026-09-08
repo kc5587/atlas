@@ -1,20 +1,19 @@
 """Build the fixed v1 report from one curated observation set."""
 
+import json
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import date, datetime
-import json
-from typing import Callable
 from pathlib import Path
+from typing import Callable
 
 from atlas.analysis.demand import demand_pressure
 from atlas.analysis.price import price_stress
 from atlas.analysis.supply import supply_tightness
 from atlas.evidence import Observation
 from atlas.reporting import build_report_export
-from atlas.snapshot import read_observations
 from atlas.scoring import BottleneckScore, ComponentSignal, score_region
-
+from atlas.snapshot import read_observations
 
 EXPECTED_HOURS_PER_DAY = 24
 
@@ -44,7 +43,9 @@ def build_report_from_observations(
         else:
             scores.append(score)
     return build_report_export(
-        scores=tuple(sorted(scores, key=lambda score: (-score.pressure, score.region_id))),
+        scores=tuple(
+            sorted(scores, key=lambda score: (-score.pressure, score.region_id))
+        ),
         unavailable_regions=unavailable,
         capex_observations=capex_observations,
         company_labels=company_labels,
@@ -63,9 +64,7 @@ def build_report_from_snapshot(
     """Load one published snapshot and build its report payload."""
 
     manifest = json.loads((snapshot_dir / "manifest.json").read_text(encoding="utf-8"))
-    eia_observations = read_observations(
-        snapshot_dir / "curated/eia_observations.json"
-    )
+    eia_observations = read_observations(snapshot_dir / "curated/eia_observations.json")
     capex_observations = read_observations(snapshot_dir / "curated/sec_capex.json")
     as_of = _latest_complete_common_day(eia_observations, region_ids)
     return build_report_from_observations(

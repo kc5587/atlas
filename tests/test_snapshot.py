@@ -10,7 +10,6 @@ from atlas.snapshot import (
     write_observations,
 )
 
-
 SOURCE = SourceRef(
     id="fixture:test",
     url="https://example.com/data",
@@ -34,7 +33,9 @@ def observation(period: date | datetime, index: int) -> Observation:
     )
 
 
-def test_observations_round_trip_with_date_and_datetime_precision(tmp_path: Path) -> None:
+def test_observations_round_trip_with_date_and_datetime_precision(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "observations.json"
     original = (
         observation(date(2026, 7, 2), 0),

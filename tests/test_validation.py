@@ -3,7 +3,6 @@ from datetime import date, datetime, timedelta, timezone
 from atlas.analysis.validation import validate_observations
 from atlas.evidence import EvidenceKind, Observation, SourceRef
 
-
 SOURCE = SourceRef("test", "https://example.com", "Test")
 
 
@@ -30,7 +29,9 @@ def test_validation_allows_documented_missing_ercot_price() -> None:
         item
         for index in range(365)
         for metric in ("demand", "net_generation")
-        for item in (_observation(metric, "ERCO", start + timedelta(days=index), index),)
+        for item in (
+            _observation(metric, "ERCO", start + timedelta(days=index), index),
+        )
     )
     result = validate_observations(
         observations,

@@ -5,7 +5,6 @@ import pytest
 from atlas.analysis.demand import DemandPressureConfig, demand_pressure
 from atlas.evidence import EvidenceKind, Observation, SourceRef
 
-
 SOURCE = SourceRef(
     id="fixture:eia",
     url="https://www.eia.gov/electricity/gridmonitor/about",
@@ -33,8 +32,7 @@ def observation(day: date, value: float, index: int) -> Observation:
 def test_demand_pressure_is_derived_from_a_trailing_baseline() -> None:
     start = date(2026, 6, 1)
     observations = tuple(
-        observation(start + timedelta(days=index), 100.0, index)
-        for index in range(7)
+        observation(start + timedelta(days=index), 100.0, index) for index in range(7)
     ) + (observation(start + timedelta(days=7), 120.0, 7),)
 
     signal = demand_pressure(

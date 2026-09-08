@@ -5,7 +5,6 @@ from pathlib import Path
 
 from download_public_file import download
 
-
 BASE_URL = "https://www.eia.gov/electricity/gridmonitor/sixMonthFiles/"
 
 

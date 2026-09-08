@@ -20,12 +20,15 @@ def validate_observations(
 
     if start > end or minimum_metric_days <= 0 or minimum_price_days <= 0:
         raise ValueError("invalid validation window or minimum metric days")
-    structural = tuple(item for item in observations if item.metric_id != "wholesale_price")
-    duplicate_ids = _duplicates(item.id for item in structural)
-    duplicate_keys = _duplicates(
-        _observation_key(item) for item in structural
+    structural = tuple(
+        item for item in observations if item.metric_id != "wholesale_price"
     )
-    coverage = [_region_coverage(observations, region_id, start, end) for region_id in region_ids]
+    duplicate_ids = _duplicates(item.id for item in structural)
+    duplicate_keys = _duplicates(_observation_key(item) for item in structural)
+    coverage = [
+        _region_coverage(observations, region_id, start, end)
+        for region_id in region_ids
+    ]
     violations: list[str] = []
     if duplicate_ids:
         violations.append("duplicate_observation_ids")
@@ -44,7 +47,9 @@ def validate_observations(
                 else minimum_metric_days
             )
             if row["metric_days"][metric_id] < threshold:
-                violations.append(f"{row['region_id']}:{metric_id}:insufficient_history")
+                violations.append(
+                    f"{row['region_id']}:{metric_id}:insufficient_history"
+                )
     return {
         "schema_version": 1,
         "window": {"start": start.isoformat(), "end": end.isoformat()},

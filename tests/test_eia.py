@@ -6,7 +6,6 @@ import pytest
 from atlas.evidence import EvidenceKind, SourceRef
 from atlas.ingest.eia import EIADataError, parse_hourly_demand, parse_hourly_generation
 
-
 FIXTURE = Path("data/fixtures/eia_hourly_demand.json")
 SOURCE = SourceRef(
     id="eia:grid-monitor",

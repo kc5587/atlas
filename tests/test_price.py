@@ -5,7 +5,6 @@ import pytest
 from atlas.analysis.price import PriceStressConfig, price_stress
 from atlas.evidence import EvidenceKind, Observation, SourceRef
 
-
 SOURCE = SourceRef(
     id="fixture:eia",
     url="https://www.eia.gov/electricity/wholesale/",

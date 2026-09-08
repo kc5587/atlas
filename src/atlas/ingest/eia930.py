@@ -44,10 +44,7 @@ def _parse_file(
     except (OSError, csv.Error, UnicodeError) as error:
         raise EIA930DataError(f"could not read EIA-930 file: {path}") from error
     return tuple(
-        observation
-        for parsed in rows
-        if parsed is not None
-        for observation in parsed
+        observation for parsed in rows if parsed is not None for observation in parsed
     )
 
 

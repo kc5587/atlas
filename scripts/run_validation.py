@@ -18,7 +18,6 @@ from atlas.report_pipeline import build_report_from_snapshot
 from atlas.reporting import render_report_html
 from atlas.snapshot import read_observations, write_json_document, write_text_document
 
-
 PRICE_REGIONS = ("PJM", "MISO", "CISO", "SWPP", "NYIS", "ISNE")
 
 
@@ -45,11 +44,15 @@ def main() -> None:
     backtest = run_backtest(
         observations, DEFAULT_REGIONS, as_of_dates, (30, 90), config
     )
-    sensitivity = run_sensitivity(
-        observations,
-        DEFAULT_REGIONS,
-        max(as_of_dates),
-    ) if as_of_dates else {"schema_version": 1, "region_summary": []}
+    sensitivity = (
+        run_sensitivity(
+            observations,
+            DEFAULT_REGIONS,
+            max(as_of_dates),
+        )
+        if as_of_dates
+        else {"schema_version": 1, "region_summary": []}
+    )
     history = build_score_history(observations, DEFAULT_REGIONS, as_of_dates, config)
     benchmark = _load_benchmark(args.benchmark_json)
     analysis = {

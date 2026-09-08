@@ -5,12 +5,13 @@ __pycache__/
 *.py[cod]
 *.duckdb
 *.parquet
-data/
+data/*
 !data/fixtures/
 !data/fixtures/**
 dist/
 node_modules/
 coverage/
 .coverage
+htmlcov/
 .DS_Store
 .codex/

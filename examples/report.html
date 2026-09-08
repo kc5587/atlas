@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Atlas v1.1</title>
+<style>body{margin:0;background:#f4f1ea;color:#222;font:16px/1.5 Georgia,serif}
+main{max-width:1100px;margin:auto;padding:48px 24px}
+h1{font-size:clamp(2.4rem,6vw,5rem);line-height:1;margin:12px 0 24px;max-width:800px}
+h2{margin-top:56px;border-bottom:2px solid #222;padding-bottom:8px}
+.eyebrow{font:700 12px/1.2 ui-monospace,monospace;letter-spacing:.12em;color:#b14b2f}
+.lede{font-size:1.15rem;color:#555}
+table{border-collapse:collapse;width:100%;background:#fff}
+th,td{text-align:left;padding:12px;border-bottom:1px solid #ddd;vertical-align:top}
+th{font:700 12px ui-monospace,monospace;text-transform:uppercase;background:#222;color:#fff}
+section p{max-width:800px;color:#555}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #ddd;padding:20px}
+.card h3{margin-top:0;font:700 18px ui-monospace,monospace}
+.card-score{font-size:2.6rem;margin:8px 0}.card-score span{font-size:.9rem;color:#777}
+.card ul{padding-left:20px}.muted{color:#777}.unavailable{background:#eee}
+.history{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.history-card{background:#fff;border:1px solid #ddd;padding:16px}.history-card h3{margin:0 0 8px;font:700 16px ui-monospace,monospace}.history-card svg{width:100%;height:56px}.history-meta{font:12px ui-monospace,monospace;color:#666}.status{font:700 14px ui-monospace,monospace;text-transform:uppercase}
+.evidence-kind{font:700 11px ui-monospace,monospace;text-transform:uppercase;
+padding:2px 5px;border-radius:3px}
+.observed{background:#d7eadb}.estimated{background:#f6dfad}.inferred{background:#ded3ef}</style></head><body>
+<main><header><p class="eyebrow">ATLAS V1.1 · AI INFRASTRUCTURE BOTTLENECK MONITOR</p>
+<h1>Where is AI infrastructure under pressure?</h1>
+<p class="lede">Snapshot: 2026-07-02 ·
+Status: <strong>Illustrative Fixture</strong></p></header>
+<section><h2>Regional overview</h2><table><thead><tr>
+<th>Region</th><th>Pressure</th><th>Confidence</th><th>Data gaps / exclusions</th><th>Evidence</th>
+</tr></thead><tbody><tr><td><strong>ercot</strong></td><td>73.9</td><td>90%</td><td>none</td><td>demand_pressure: 80<br>supply_tightness: 70<br>price_stress: 75<br>execution_friction: 66</td></tr><tr><td><strong>miso</strong></td><td>49.7</td><td>64%</td><td>Not modeled: execution_friction</td><td>demand_pressure: 55<br>supply_tightness: 50<br>price_stress: 40</td></tr></tbody></table></section>
+<section><h2>Regional detail cards</h2><div class="cards"><article class='card'><h3>ercot</h3><p class='card-score'>73.9<span>/100 pressure</span></p><p>As of 2026-07-02; overall confidence 90%.</p><ul><li><strong>demand_pressure</strong>: 80 (confidence 95%)</li><li><strong>supply_tightness</strong>: 70 (confidence 90%)</li><li><strong>price_stress</strong>: 75 (confidence 90%)</li><li><strong>execution_friction</strong>: 66 (confidence 75%)</li></ul><p class='muted'>Data gaps / exclusions: none</p></article><article class='card'><h3>miso</h3><p class='card-score'>49.7<span>/100 pressure</span></p><p>As of 2026-07-02; overall confidence 64%.</p><ul><li><strong>demand_pressure</strong>: 55 (confidence 80%)</li><li><strong>supply_tightness</strong>: 50 (confidence 75%)</li><li><strong>price_stress</strong>: 40 (confidence 70%)</li><li><strong>execution_friction</strong>: unavailable (confidence 0%)</li></ul><p class='muted'>Data gaps / exclusions: Not modeled: execution_friction</p></article></div></section>
+<section><h2>Historical pressure path</h2><div class="history"><p>No score history supplied.</p></div></section>
+<section><h2>Historical validation</h2><p class="status">review required</p>
+<p>unknown observations; the coverage table makes source gaps visible.</p><table><thead><tr><th>Region</th><th>Demand days</th><th>Generation days</th><th>Price days</th><th>Range</th></tr></thead><tbody><tr><td colspan="5">No coverage details supplied.</td></tr></tbody></table></section>
+<section><h2>Backtest summary</h2><table><thead><tr><th>Horizon</th><th>Observations</th><th>Rank correlation</th><th>Mean future delta</th></tr></thead><tbody><tr><td colspan="4">No backtest supplied.</td></tr></tbody></table></section>
+<section><h2>Sensitivity range</h2><table><thead><tr><th>Region</th><th>Scenarios</th><th>Min</th><th>Max</th><th>Range</th></tr></thead><tbody><tr><td colspan="5">No sensitivity analysis supplied.</td></tr></tbody></table></section>
+<section><h2>Company capital commitment</h2><table><thead><tr>
+<th>Company</th><th>Latest filed capex</th><th>Prior filed capex</th><th>Change</th><th>Vintage</th>
+</tr></thead><tbody></tbody></table></section>
+<section><h2>Interconnection benchmark</h2><table><thead><tr><th>Region</th><th>Active MW</th><th>Withdrawal rate</th><th>Operational projects</th><th>Median years</th></tr></thead><tbody><tr><td colspan="5">No Berkeley Lab queue benchmark supplied.</td></tr></tbody></table></section>
+<section><h2>Execution-friction evidence</h2><ul>
+</ul></section>
+<section><h2>Method and caveats</h2><p>
+Pressure is descriptive, not a shortage probability or trading signal.
+Missing data lowers confidence and is not treated as zero. “Supply tightness” is a
+net-generation headroom proxy, not a formal reserve margin. Execution friction is
+evidence-only and is not included in the regional score.</p>
+<p><strong>Evidence key:</strong> <span class="evidence-kind observed">observed</span>
+is directly reported; <span class="evidence-kind estimated">estimated</span> is
+scenario or model-based; <span class="evidence-kind inferred">inferred</span> is
+an Atlas analytical interpretation.</p></section>
+</main></body></html>

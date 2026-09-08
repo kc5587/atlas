@@ -99,9 +99,7 @@ class EIAClient:
         payload = self.fetch_hourly_payload(query)
         return parse_hourly_demand(payload, EIA_SOURCE, datetime.now(timezone.utc))
 
-    def fetch_hourly_operating(
-        self, query: EIAHourlyQuery
-    ) -> tuple[Observation, ...]:
+    def fetch_hourly_operating(self, query: EIAHourlyQuery) -> tuple[Observation, ...]:
         """Fetch demand and net-generation rows from one source response."""
 
         payload = self.fetch_hourly_payload(query)
@@ -134,7 +132,9 @@ class EIAClient:
                 try:
                     total = int(raw_total)
                 except (TypeError, ValueError) as error:
-                    raise EIADataError("EIA response total must be an integer") from error
+                    raise EIADataError(
+                        "EIA response total must be an integer"
+                    ) from error
             received = sum(
                 len(_mapping(page.get("response")).get("data", [])) for page in pages
             )
@@ -160,7 +160,9 @@ class EIAClient:
             except HTTPError as error:
                 if error.code != 429 or attempt == 3:
                     raise EIAFetchError("could not fetch EIA data") from error
-                retry_after = error.headers.get("Retry-After") if error.headers else None
+                retry_after = (
+                    error.headers.get("Retry-After") if error.headers else None
+                )
                 try:
                     delay = float(retry_after) if retry_after else 2.0**attempt
                 except ValueError:
@@ -240,7 +242,9 @@ def _load_payload(payload_or_path: Mapping[str, object] | Path) -> Mapping[str, 
         try:
             return _mapping(json.loads(payload_or_path.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError) as error:
-            raise EIADataError(f"could not read EIA payload: {payload_or_path}") from error
+            raise EIADataError(
+                f"could not read EIA payload: {payload_or_path}"
+            ) from error
     return payload_or_path
 
 
