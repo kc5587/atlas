@@ -79,9 +79,23 @@ def test_backtest_emits_forward_only_rows_and_summary() -> None:
         config=config(),
     )
 
-    assert result["lookahead_safe"] is True
     assert len(result["rows"]) == 2
     assert result["summaries"][0]["horizon_days"] == 30
+
+
+def test_backtest_does_not_claim_verified_publication_vintages() -> None:
+    result = run_backtest(
+        observations(),
+        ("ERCO",),
+        (date(2024, 3, 31),),
+        horizons=(30,),
+        config=config(),
+    )
+
+    assert result["observation_date_filtered"] is True
+    assert result["publication_vintages_verified"] is False
+    assert result["lookahead_safe"] is False
+    assert "publication delays" in result["limitations"][0]
 
 
 def test_sensitivity_reports_scenario_range() -> None:

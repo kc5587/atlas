@@ -24,11 +24,11 @@ the example values as live research.
 
 ## Release status
 
-**v1.1 implementation complete — last repository verification: 2026-09-08.**
+**v1.1 implementation complete — last repository verification: 2026-10-01.**
 
 The fixed v1.1 scope is implemented and the repository checks pass:
 
-- 63 automated tests pass.
+- 64 automated tests pass.
 - Package coverage is at least 86%, above the CI gate of 80%.
 - The deterministic fixture snapshot and static report build successfully.
 - No unfinished-work markers were found in the
@@ -68,7 +68,7 @@ latest complete common operating day, 2025-12-31.
 
 Validation passed with **529,434 observations**, seven regions, zero duplicate
 observation IDs, zero duplicate observation keys, and zero release-gate
-violations. The look-ahead-safe backtest contained 258 30-day observations
+violations. The observation-date-filtered hindcast contained 258 30-day observations
 (Spearman rank correlation **0.19**) and 256 90-day observations (**-0.10**).
 Sensitivity analysis covered **18 fixed scenarios per region**. These are
 descriptive research results—not forecasts, shortage probabilities, or trading
@@ -229,8 +229,18 @@ source availability and the recorded as-of date. It:
 6. Checks date coverage, minimum history, structural duplicates, and required
    price coverage before publishing validation output.
 
-The backtest is look-ahead-safe: scores use observations through the as-of
-date, while outcomes use only subsequent observations.
+Scores use observations dated through the as-of date; comparison scores are
+calculated at later dates. This prevents future observation dates from entering
+the signal, but does **not** reconstruct historical publication delays or source
+revisions. The evaluation uses the loaded snapshot's data vintage, not a verified
+archive of what was available to an investor at each historical date. It is a
+descriptive hindcast, not a certified point-in-time investment backtest.
+
+The output explicitly reports `observation_date_filtered: true` and
+`publication_vintages_verified: false`. The compatibility field `lookahead_safe`
+is `false` because full look-ahead safety has not been established. Existing live
+validation bundles must be regenerated to include this corrected metadata;
+the scoring formula and the reported historical correlations are unchanged.
 
 ## Generated outputs
 

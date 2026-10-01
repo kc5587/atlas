@@ -63,7 +63,11 @@ def run_backtest(
     horizons: tuple[int, ...] = (30, 90),
     config: EvaluationConfig = EvaluationConfig(),
 ) -> dict[str, object]:
-    """Compare month-end scores with subsequently realised pressure."""
+    """Compare observation-date-filtered scores with later realised pressure.
+
+    Source publication delays and revisions are not reconstructed. This is a
+    descriptive hindcast, not a certified point-in-time investment backtest.
+    """
 
     rows: list[dict[str, object]] = []
     for region_id in region_ids:
@@ -92,7 +96,13 @@ def run_backtest(
     return {
         "schema_version": 1,
         "method": "as_of_score_vs_future_realised_composite",
-        "lookahead_safe": True,
+        "lookahead_safe": False,
+        "observation_date_filtered": True,
+        "publication_vintages_verified": False,
+        "limitations": [
+            "Observation dates are filtered, but publication delays and revised "
+            "source vintages are not reconstructed."
+        ],
         "rows": rows,
         "summaries": [_summarise(rows, horizon) for horizon in horizons],
     }

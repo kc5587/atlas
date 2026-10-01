@@ -34,8 +34,8 @@ become v1.2 work.
    date-range checks.
 2. Multi-year EIA wholesale files plus NYISO monthly archived LBMP files,
    normalised into the existing observation contract.
-3. A transparent hindcast evaluation: score at month-end using information
-   available then, compare with the next 30/90-day realised component pressure,
+3. A transparent hindcast evaluation: score at month-end using observations
+   dated through that month-end, compare with the 30/90-day realised component pressure,
    and report rank correlation and top-versus-bottom spreads.
 4. Sensitivity analysis over demand and price lookbacks and three fixed weight
    sets, reporting score ranges and rank stability.
@@ -54,8 +54,10 @@ become v1.2 work.
 - Historical ingestion proves pagination, monotonic coverage, structural
   duplicate handling, and expected minimum observation counts. Multiple
   same-day wholesale hubs are retained as separate price observations.
-- Backtest outputs contain no look-ahead: each signal uses observations through
-  its as-of date, while outcomes use only the subsequent window.
+- Hindcast signals use observations dated through their as-of date, with
+  comparison scores calculated at later dates. Outputs explicitly disclose that
+  historical publication delays and revised source vintages are not reconstructed;
+  observation-date filtering alone does not establish full look-ahead safety.
 - Sensitivity output reports score range and rank stability for every region.
 - The report shows the score history, component history, validation results,
   and interconnection benchmark with source links and caveats.
